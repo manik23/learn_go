@@ -1,0 +1,7 @@
+go 1.25.1
+
+use (
+	./modules/learn-cgo
+	./modules/learn-gin
+	./modules/learn-routines
+)
