@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -90,8 +89,6 @@ func main() {
 
 	var wg sync.WaitGroup
 
-	wg.Wait()
-
 	var success uint64
 	var failure uint64
 
@@ -124,9 +121,5 @@ func main() {
 	close(queue)
 	wg.Wait()
 	log.Print("ShutDown Complete")
-
-	strings.Split()
-	strings.ToLower()
-	strings.
 
 }
