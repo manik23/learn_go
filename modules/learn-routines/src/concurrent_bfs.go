@@ -18,7 +18,6 @@ func process(graph map[int][]int, jobs <-chan int, resultBFS chan reachableNode)
 }
 
 func travel(graph map[int][]int, startNode int) reachableNode {
-
 	visited := make(map[int]bool)
 
 	list := list.New()
@@ -34,7 +33,6 @@ func travel(graph map[int][]int, startNode int) reachableNode {
 		order = append(order, node)
 
 		for _, neigh := range graph[node] {
-
 			if !visited[neigh] {
 				visited[neigh] = true
 				list.PushBack(neigh)
@@ -57,9 +55,7 @@ func travel(graph map[int][]int, startNode int) reachableNode {
 // Return a map from the query (starting node) to the BFS order as a slice of nodes.
 // YOU MUST use concurrency (goroutines + channels) to pass the performance tests.
 func ConcurrentBFSQueries(graph map[int][]int, queries []int, numWorkers int) map[int][]int {
-
 	if numWorkers == 0 || len(queries) == 0 {
-
 		return map[int][]int{}
 	}
 

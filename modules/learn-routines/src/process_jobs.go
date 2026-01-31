@@ -28,7 +28,6 @@ type Processor interface {
 type simpleProcessor struct{}
 
 func (s *simpleProcessor) Process(ctx context.Context, j Job) error {
-
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
@@ -37,7 +36,6 @@ func (s *simpleProcessor) Process(ctx context.Context, j Job) error {
 		log.Println("Did something :", j.ID, " ", j.Data)
 		return nil
 	}
-
 }
 
 func newServer(queue chan Job, success *uint64, failure *uint64) *http.Server {
@@ -67,11 +65,9 @@ func newServer(queue chan Job, success *uint64, failure *uint64) *http.Server {
 		hello := "hello"
 		w.Write([]byte(hello))
 		w.WriteHeader(http.StatusAccepted)
-
 	})
 
 	mux.HandleFunc("/:name", func(w http.ResponseWriter, r *http.Request) {
-
 	})
 
 	return &http.Server{
@@ -80,7 +76,6 @@ func newServer(queue chan Job, success *uint64, failure *uint64) *http.Server {
 }
 
 func main() {
-
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 

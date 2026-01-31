@@ -27,14 +27,12 @@ func loggerMiddleware() gin.HandlerFunc {
 }
 
 func setupV1Routes(router *gin.Engine) {
-
 	v1 := router.Group("v1")
 	v1.Use(loggerMiddleware())
 	{
 		v1.GET("/user/:id", getUserByID)
 		v1.POST("/user", createUser)
 	}
-
 }
 
 func AuthMiddleware(next http.Handler) http.Handler {
@@ -67,7 +65,6 @@ func getUserByID(c *gin.Context) {
 			"created_at": val,
 		})
 	}
-
 }
 
 func createUser(c *gin.Context) {
@@ -80,11 +77,9 @@ func createUser(c *gin.Context) {
 	localUserCache.Store(user.Name, time.Now())
 
 	c.JSON(http.StatusOK, nil)
-
 }
 
 func CountWordFrequency(text string) map[string]int {
-
 	wordFreq := make(map[string]int)
 
 	// Create a regex to match only letters and digits
@@ -107,7 +102,6 @@ func checkAlphanumeric(b byte) string {
 // BinarySearchRecursive performs binary search using recursion.
 // Returns the index of the target if found, or -1 if not found.
 func BinarySearchRecursive(arr []int, target int, left int, right int) int {
-
 	if left > right {
 		return -1
 	}

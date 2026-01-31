@@ -6,6 +6,7 @@ package main
 #include <hello.h>
 */
 import "C"
+
 import (
 	"log"
 )

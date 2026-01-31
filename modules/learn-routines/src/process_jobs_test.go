@@ -33,7 +33,6 @@ func BenchmarkSubmt(b *testing.B) {
 		wg.Wait()
 
 	}
-
 }
 
 // How fast can my system process one request under bounded concurrency?”

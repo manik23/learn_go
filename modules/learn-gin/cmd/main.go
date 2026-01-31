@@ -11,7 +11,6 @@ import (
 )
 
 func main() {
-
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
 	router := gin.Default()
@@ -35,5 +34,4 @@ func main() {
 	}
 
 	log.Println("exiting service")
-
 }
