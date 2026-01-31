@@ -93,7 +93,10 @@ func main() {
 	var failure uint64
 
 	for range WORKER {
-		wg.Go(func() {
+
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
 			for j := range queue {
 				jobCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 				if err := s.Process(jobCtx, j); err != nil {
@@ -103,13 +106,13 @@ func main() {
 				cancel()
 				atomic.AddUint64(&success, 1)
 			}
-		})
+		}()
 	}
 
 	srv := newServer(queue, &success, &failure)
 	srv.Addr = ":8080"
 	go func() {
-		log.Println("Starting the HTTP server")
+		log.Println("Starting the HTTP server at 8080")
 		srv.ListenAndServe()
 	}()
 
@@ -121,5 +124,4 @@ func main() {
 	close(queue)
 	wg.Wait()
 	log.Print("ShutDown Complete")
-
 }

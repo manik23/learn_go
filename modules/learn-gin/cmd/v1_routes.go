@@ -37,6 +37,26 @@ func setupV1Routes(router *gin.Engine) {
 
 }
 
+func AuthMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// TODO: Implement the logic:
+		//  1) Grab the "X-Auth-Token" header
+		//  2) Compare against validToken
+		//  3) If mismatch or missing, respond with 401
+		//  4) Otherwise pass to next handler
+
+		if r.Header == nil {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+
+		if token := r.Header.Get("X-Auth-Token"); token != "" {
+			log.Println("ok")
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 func getUserByID(c *gin.Context) {
 	id := c.Param("id")
 
