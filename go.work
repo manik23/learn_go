@@ -1,6 +1,7 @@
 go 1.25.6
 
 use (
+	./modules/go-interview-practise
 	./modules/learn-cgo
 	./modules/learn-gin
 	./modules/learn-routines
