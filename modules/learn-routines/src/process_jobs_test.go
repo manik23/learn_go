@@ -83,10 +83,12 @@ func BenchmarkSubmit(b *testing.B) {
 		)
 		req.Header.Set("Content-Type", "application/json")
 
-		_, err := client.Do(req)
+		resp, err := client.Do(req)
 		if err != nil {
 			b.Fatal(err)
 		}
+		io.Copy(io.Discard, resp.Body) // Ensure the connection can be reused
+		resp.Body.Close()              // CLOSE THE BODY
 
 		bufPool.Put(buf)
 		<-sem

@@ -3,17 +3,21 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log"
+	"math/rand"
 	"net/http"
 	"os"
 	"os/signal"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
 )
 
 const (
-	WORKER = 2
+	WORKER_FACTOR = 2
+	RETRIES       = 3
 )
 
 type Job struct {
@@ -28,12 +32,17 @@ type Processor interface {
 type simpleProcessor struct{}
 
 func (s *simpleProcessor) Process(ctx context.Context, j Job) error {
+	workTime := time.Duration(rand.Intn(20)) * time.Millisecond
+	t := time.NewTimer(workTime)
+	defer t.Stop()
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
-	default:
-		time.Sleep(time.Microsecond * 1)
-		log.Println("Did something :", j.ID, " ", j.Data)
+	case <-t.C:
+		if rand.Intn(10) < 3 {
+			return errors.New("random database error")
+		}
+		// log.Println("Did something :", j.ID, " ", j.Data)
 		return nil
 	}
 }
@@ -79,7 +88,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 
-	queue := make(chan Job, 100)
+	queue := make(chan Job, 1000)
 	s := simpleProcessor{}
 
 	var wg sync.WaitGroup
@@ -87,19 +96,28 @@ func main() {
 	var success uint64
 	var failure uint64
 
-	for range WORKER {
+	for range WORKER_FACTOR * runtime.NumCPU() {
 
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			for j := range queue {
-				jobCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
-				if err := s.Process(jobCtx, j); err != nil {
+
+				jobCtx, cancel := context.WithTimeout(ctx, 1*time.Second)
+				var err error
+				for retry := 0; retry < RETRIES; retry++ {
+					if err = s.Process(jobCtx, j); err == nil {
+						break
+					}
+					time.Sleep((1 << retry) * time.Millisecond)
+				}
+				if err != nil {
+					log.Print("process failed after retries:", err.Error())
 					atomic.AddUint64(&failure, 1)
-					log.Print("process:", err.Error())
+				} else {
+					atomic.AddUint64(&success, 1)
 				}
 				cancel()
-				atomic.AddUint64(&success, 1)
 			}
 		}()
 	}
