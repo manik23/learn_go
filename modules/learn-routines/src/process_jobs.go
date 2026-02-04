@@ -20,9 +20,19 @@ const (
 	RETRIES       = 3
 )
 
+var (
+	stats = make(map[int]int)
+	mu    = sync.RWMutex{}
+)
+
 type Job struct {
 	ID   int    `json:"id"`
 	Data string `json:"data"`
+}
+
+type Result struct {
+	JobID int
+	Len   int
 }
 
 type Processor interface {
@@ -66,17 +76,21 @@ func newServer(queue chan Job, success *uint64, failure *uint64) *http.Server {
 	})
 
 	mux.HandleFunc("/metrics", func(w http.ResponseWriter, r *http.Request) {
+
+		mu.RLock()
+		statsCopy := make(map[int]int)
+		for k, v := range stats {
+			statsCopy[k] = v
+		}
 		lenQeue := len(queue)
-		_ = json.NewEncoder(w).Encode(map[string]any{"queue_Depth": lenQeue, "http_success": success, "http_failure": failure})
+		_ = json.NewEncoder(w).Encode(map[string]any{"queue_Depth": lenQeue, "http_success": success, "http_failure": failure, "jobs_done": statsCopy})
+		mu.RUnlock()
 	})
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		hello := "hello"
 		w.Write([]byte(hello))
 		w.WriteHeader(http.StatusAccepted)
-	})
-
-	mux.HandleFunc("/:name", func(w http.ResponseWriter, r *http.Request) {
 	})
 
 	return &http.Server{
@@ -89,6 +103,8 @@ func main() {
 	defer stop()
 
 	queue := make(chan Job, 1000)
+	results := make(chan Result, 1000)
+
 	s := simpleProcessor{}
 
 	var wg sync.WaitGroup
@@ -105,7 +121,8 @@ func main() {
 
 				jobCtx, cancel := context.WithTimeout(ctx, 1*time.Second)
 				var err error
-				for retry := 0; retry < RETRIES; retry++ {
+				for retry := range RETRIES {
+					log.Print(retry)
 					if err = s.Process(jobCtx, j); err == nil {
 						break
 					}
@@ -116,6 +133,7 @@ func main() {
 					atomic.AddUint64(&failure, 1)
 				} else {
 					atomic.AddUint64(&success, 1)
+					results <- Result{JobID: j.ID, Len: len(j.Data)}
 				}
 				cancel()
 			}
@@ -129,12 +147,29 @@ func main() {
 		srv.ListenAndServe()
 	}()
 
-	// Wait fotr shutdown
+	var aggWG sync.WaitGroup
+	aggWG.Add(1)
+	go func() {
+		defer aggWG.Done()
+		for r := range results {
+			mu.Lock()
+			stats[r.JobID] += r.Len
+			mu.Unlock()
+		}
+	}()
+
+	// Wait for shutdown
 	<-ctx.Done()
 
 	// Stop Accepting new requests
 	srv.Shutdown(context.Background())
+	// close incoming requests
 	close(queue)
+	// wait for all workers to finish
 	wg.Wait()
+	// close results channel
+	close(results)
+	// wait for aggregator to finish remaning items
+	aggWG.Wait()
 	log.Print("ShutDown Complete")
 }
