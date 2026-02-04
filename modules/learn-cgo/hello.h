@@ -66,7 +66,7 @@ writes an object-file index. ar rcs libcommonlib.a cpp_part.o c_part.o
 */
 #ifdef __cplusplus
 extern "C" {
-#endif __cplusplus
+#endif // __cplusplus
 
 void hello_from_cpp();
 void greet_user(const char *name);
