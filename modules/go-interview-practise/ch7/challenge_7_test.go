@@ -1,4 +1,4 @@
-package challenge7
+package ch7
 
 import (
 	"fmt"

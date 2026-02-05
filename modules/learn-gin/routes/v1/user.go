@@ -1,11 +1,12 @@
 package v1
 
 import (
+	"fmt"
 	"net/http"
-	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 const (
@@ -13,21 +14,27 @@ const (
 )
 
 type User struct {
-	Name string `json:"name,omitempty"`
+	Name      string    `json:"name,omitempty" binding:"required"`
+	CreatedAt time.Time `json:"created_at,omitzero"`
 }
 
 type UserHandler struct {
-	cache *sync.Map
+	db *gorm.DB
 }
 
-func newUserHandler() *UserHandler {
+func newUserHandler(db *gorm.DB) *UserHandler {
 	return &UserHandler{
-		cache: &sync.Map{},
+		db: db,
 	}
 }
 
-func setupUserHandler(router *gin.Engine, userHandler *UserHandler) {
-	v1 := router.Group("v1")
+func setupUserHandler(v1 *gin.RouterGroup, db *gorm.DB) error {
+	if err := db.AutoMigrate(&User{}); err != nil {
+		return fmt.Errorf("failed to migrate user table: %w", err)
+	}
+
+	userHandler := newUserHandler(db)
+
 	v1.Use(loggerMiddleware())
 	v1.Use(MaxConcurrentMiddleware(MAX_CONCURRENT_REQUESTS))
 	v1.Use(AuthMiddleware())
@@ -35,28 +42,36 @@ func setupUserHandler(router *gin.Engine, userHandler *UserHandler) {
 		v1.GET("/user/:id", userHandler.getUserByID)
 		v1.POST("/user", userHandler.createUser)
 	}
+
+	return nil
 }
 
 func (h *UserHandler) getUserByID(c *gin.Context) {
 	id := c.Param("id")
 
-	if val, ok := h.cache.Load(id); !ok {
-		c.AbortWithStatus(http.StatusBadRequest)
-	} else {
-		c.JSON(http.StatusOK, gin.H{
-			"created_at": val,
-		})
+	var user User
+	if err := h.db.Where("name = ?", id).First(&user).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+		return
 	}
+
+	c.JSON(http.StatusOK, user)
 }
 
 func (h *UserHandler) createUser(c *gin.Context) {
 	var user User
 	if err := c.ShouldBindBodyWithJSON(&user); err != nil {
-		c.JSON(400, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	h.cache.Store(user.Name, time.Now())
+	user.CreatedAt = time.Now()
+
+	tx := h.db.FirstOrCreate(&user, User{Name: user.Name})
+	if tx.Error != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": tx.Error.Error()})
+		return
+	}
 
 	c.JSON(http.StatusOK, nil)
 }

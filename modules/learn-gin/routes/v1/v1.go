@@ -1,8 +1,12 @@
 package v1
 
-import "github.com/gin-gonic/gin"
+import (
+	"gorm.io/gorm"
 
-func SetupV1Routes(router *gin.Engine) {
-	userHandler := newUserHandler()
-	setupUserHandler(router, userHandler)
+	"github.com/gin-gonic/gin"
+)
+
+func SetupV1Routes(router *gin.Engine, db *gorm.DB) error {
+	v1 := router.Group("v1")
+	return setupUserHandler(v1, db)
 }

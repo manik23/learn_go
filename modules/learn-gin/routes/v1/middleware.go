@@ -41,7 +41,6 @@ func AuthMiddleware() gin.HandlerFunc {
 func MaxConcurrentMiddleware(addmissionTokens int) gin.HandlerFunc {
 	rateLimiter := make(chan struct{}, addmissionTokens)
 	return func(c *gin.Context) {
-
 		select {
 		case rateLimiter <- struct{}{}:
 			defer func() { <-rateLimiter }()

@@ -2,12 +2,13 @@ package main
 
 import (
 	"context"
-	v1 "learn-gin/routes/v1"
-
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
+
+	"learn-gin/db"
+	v1 "learn-gin/routes/v1"
 
 	"github.com/gin-gonic/gin"
 )
@@ -17,7 +18,14 @@ func main() {
 	defer cancel()
 	router := gin.Default()
 
-	v1.SetupV1Routes(router)
+	db, err := db.SetupDB()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	if err := v1.SetupV1Routes(router, db); err != nil {
+		log.Fatal(err)
+	}
 
 	server := &http.Server{
 		Addr:    ":8081",

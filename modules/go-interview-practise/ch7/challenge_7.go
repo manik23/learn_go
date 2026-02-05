@@ -1,5 +1,5 @@
 // Package challenge7 contains the solution for Challenge 7: Bank Account with Error Handling.
-package challenge7
+package ch7
 
 import (
 	"fmt"

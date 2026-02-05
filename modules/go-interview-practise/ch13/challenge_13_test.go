@@ -1,4 +1,4 @@
-package challeng13
+package ch13
 
 import (
 	"database/sql"
