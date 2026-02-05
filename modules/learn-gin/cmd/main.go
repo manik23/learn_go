@@ -2,11 +2,12 @@ package main
 
 import (
 	"context"
+	v1 "learn-gin/routes/v1"
+
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
-	"sync"
 
 	"github.com/gin-gonic/gin"
 )
@@ -15,10 +16,8 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
 	router := gin.Default()
-	u := &UserHandler{
-		cache: &sync.Map{},
-	}
-	setupV1Routes(router, u)
+
+	v1.SetupV1Routes(router)
 
 	server := &http.Server{
 		Addr:    ":8081",

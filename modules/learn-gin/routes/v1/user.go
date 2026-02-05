@@ -1,4 +1,4 @@
-package main
+package v1
 
 import (
 	"net/http"
@@ -20,7 +20,13 @@ type UserHandler struct {
 	cache *sync.Map
 }
 
-func setupV1Routes(router *gin.Engine, userHandler *UserHandler) {
+func newUserHandler() *UserHandler {
+	return &UserHandler{
+		cache: &sync.Map{},
+	}
+}
+
+func setupUserHandler(router *gin.Engine, userHandler *UserHandler) {
 	v1 := router.Group("v1")
 	v1.Use(loggerMiddleware())
 	v1.Use(MaxConcurrentMiddleware(MAX_CONCURRENT_REQUESTS))
