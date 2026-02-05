@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 
 	"github.com/gin-gonic/gin"
 )
@@ -14,7 +15,10 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
 	router := gin.Default()
-	setupV1Routes(router)
+	u := &UserHandler{
+		cache: &sync.Map{},
+	}
+	setupV1Routes(router, u)
 
 	server := &http.Server{
 		Addr:    ":8081",
