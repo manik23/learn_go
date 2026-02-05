@@ -36,15 +36,14 @@ type Result struct {
 }
 
 type Processor interface {
-	Process(ctx context.Context, j Job) error
+	Process(ctx context.Context, j Job, t *time.Timer, workTime time.Duration) error
 }
 
 type simpleProcessor struct{}
 
-func (s *simpleProcessor) Process(ctx context.Context, j Job) error {
-	workTime := time.Duration(rand.Intn(20)) * time.Millisecond
-	t := time.NewTimer(workTime)
-	defer t.Stop()
+func (s *simpleProcessor) Process(ctx context.Context, j Job, t *time.Timer, workTime time.Duration) error {
+
+	t.Reset(workTime)
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
@@ -52,7 +51,6 @@ func (s *simpleProcessor) Process(ctx context.Context, j Job) error {
 		if rand.Intn(10) < 3 {
 			return errors.New("random database error")
 		}
-		// log.Println("Did something :", j.ID, " ", j.Data)
 		return nil
 	}
 }
@@ -117,13 +115,17 @@ func main() {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			for j := range queue {
+			// PRE-ALLOCATED: One timer per worker
+			// Initialized with a long duration; it will be Reset later
+			t := time.NewTimer(time.Hour)
+			defer t.Stop()
 
+			for j := range queue {
 				jobCtx, cancel := context.WithTimeout(ctx, 1*time.Second)
 				var err error
 				for retry := range RETRIES {
-					log.Print(retry)
-					if err = s.Process(jobCtx, j); err == nil {
+					workTime := time.Duration(rand.Intn(20)) * time.Millisecond
+					if err = s.Process(jobCtx, j, t, workTime); err == nil {
 						break
 					}
 					time.Sleep((1 << retry) * time.Millisecond)
