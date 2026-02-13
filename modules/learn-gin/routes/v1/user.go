@@ -11,6 +11,8 @@ import (
 
 const (
 	MAX_CONCURRENT_REQUESTS = 10
+	MAX_REQUEST_PER_SEC     = 10
+	RATE                    = 1 * time.Second
 )
 
 type User struct {
@@ -36,8 +38,9 @@ func setupUserHandler(v1 *gin.RouterGroup, db *gorm.DB) error {
 	userHandler := newUserHandler(db)
 
 	v1.Use(loggerMiddleware())
-	v1.Use(MaxConcurrentMiddleware(MAX_CONCURRENT_REQUESTS))
 	v1.Use(AuthMiddleware())
+	v1.Use(RateLimiterMiddleware(MAX_REQUEST_PER_SEC, RATE))
+	v1.Use(MaxConcurrentMiddleware(MAX_CONCURRENT_REQUESTS))
 	{
 		v1.GET("/user/:id", userHandler.getUserByID)
 		v1.POST("/user", userHandler.createUser)

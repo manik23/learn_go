@@ -3,6 +3,7 @@ package v1
 import (
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -38,12 +39,44 @@ func AuthMiddleware() gin.HandlerFunc {
 	}
 }
 
-func MaxConcurrentMiddleware(addmissionTokens int) gin.HandlerFunc {
-	rateLimiter := make(chan struct{}, addmissionTokens)
+func MaxConcurrentMiddleware(admissionTokens int) gin.HandlerFunc {
+	concurrencyLimiter := make(chan struct{}, admissionTokens)
 	return func(c *gin.Context) {
 		select {
-		case rateLimiter <- struct{}{}:
-			defer func() { <-rateLimiter }()
+		case concurrencyLimiter <- struct{}{}:
+			defer func() { <-concurrencyLimiter }()
+			c.Next()
+		default:
+			c.AbortWithStatus(http.StatusTooManyRequests)
+		}
+	}
+}
+
+func RateLimiterMiddleware(requestPerSecond int, rate time.Duration) gin.HandlerFunc {
+	rateLimiter := make(chan struct{}, requestPerSecond)
+
+	// Fill the bucket with initial tokens
+	for range requestPerSecond {
+		rateLimiter <- struct{}{}
+	}
+
+	go func() {
+		t := time.NewTicker(rate)
+		defer t.Stop()
+		for range t.C {
+			for range requestPerSecond {
+				select {
+				case rateLimiter <- struct{}{}:
+				default:
+					goto nextTick
+				}
+			}
+		nextTick:
+		}
+	}()
+	return func(c *gin.Context) {
+		select {
+		case <-rateLimiter:
 			c.Next()
 		default:
 			c.AbortWithStatus(http.StatusTooManyRequests)
