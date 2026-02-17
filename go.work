@@ -5,4 +5,5 @@ use (
 	./modules/learn-cgo
 	./modules/learn-gin
 	./modules/learn-routines
+	./modules/learn-runtime
 )
