@@ -199,6 +199,9 @@ func TestHalfOpenTransition(t *testing.T) {
 		ReadyToTrip: func(m Metrics) bool {
 			return m.ConsecutiveFailures >= 2
 		},
+		OnStateChange: func(name string, from, to State) {
+			fmt.Printf("Circuit breaker %s : from %v to %v \n", name, from, to)
+		},
 	}
 
 	cb := NewCircuitBreaker(config)
