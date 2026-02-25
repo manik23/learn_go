@@ -6,4 +6,5 @@ use (
 	./modules/learn-gin
 	./modules/learn-routines
 	./modules/learn-runtime
+	./modules/prod-service-patterns
 )
