@@ -7,9 +7,10 @@ import (
 	"math/rand"
 	"net/http"
 	"os/signal"
-	"prod-service-patterns/db"
 	"syscall"
 	"time"
+
+	"prod-service-patterns/db"
 
 	"github.com/google/uuid"
 )
@@ -23,7 +24,8 @@ type contextKey string
 const jobIDKey contextKey = "job_id"
 
 type AppConfig struct {
-	DB *db.Database
+	DB  *db.Database
+	ctx context.Context
 }
 
 func newHttpHandler(appConfig *AppConfig) http.Handler {
@@ -48,7 +50,8 @@ func main() {
 	}
 
 	appConfig := &AppConfig{
-		DB: db,
+		DB:  db,
+		ctx: ctx,
 	}
 
 	handler := newHttpHandler(appConfig)
@@ -153,7 +156,13 @@ func (appConfig *AppConfig) stepStore(ctx context.Context) error {
 	select {
 	case <-ctx.Done():
 		{
+			// User centric cancellation
 			return ctx.Err()
+		}
+	case <-appConfig.ctx.Done():
+		{
+			// Application centric cancellation
+			return appConfig.ctx.Err()
 		}
 	case <-appConfig.DB.Token:
 		{
@@ -167,9 +176,11 @@ func (appConfig *AppConfig) stepStore(ctx context.Context) error {
 			defer timer.Stop()
 
 			select {
-			case <-ctx.Done():
+			case <-ctx.Done(): // User left or Timeout
 				return ctx.Err()
-			case <-timer.C:
+			case <-appConfig.ctx.Done(): // Global Shutdown
+				return appConfig.ctx.Err()
+			case <-timer.C: // Work completed
 				fmt.Printf(
 					"Job %s: Acquired connection at %v, working for %v\n",
 					ctx.Value(jobIDKey),
