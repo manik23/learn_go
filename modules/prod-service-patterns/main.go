@@ -6,22 +6,26 @@ import (
 	"log"
 	"math/rand"
 	"net/http"
+	_ "net/http/pprof"
 	"os/signal"
+	"sync/atomic"
 	"syscall"
 	"time"
 
 	"prod-service-patterns/db"
-
-	"github.com/google/uuid"
 )
 
 const (
-	CAPACITY = 10
+	CAPACITY            = 10
+	jobIDKey contextKey = "job_id"
+)
+
+var (
+	jobID          uint64 = 0
+	successfulResp        = []byte("Processed successfully")
 )
 
 type contextKey string
-
-const jobIDKey contextKey = "job_id"
 
 type AppConfig struct {
 	DB  *db.Database
@@ -43,6 +47,10 @@ func main() {
 
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
+
+	go func() {
+		log.Println(http.ListenAndServe("localhost:6060", nil))
+	}()
 
 	db, err := db.NewDatabase(ctx, CAPACITY)
 	if err != nil {
@@ -86,7 +94,7 @@ func (appConfig *AppConfig) handleProcess(w http.ResponseWriter, r *http.Request
 	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 	defer cancel()
 
-	ctx = context.WithValue(ctx, jobIDKey, uuid.New().String())
+	ctx = context.WithValue(ctx, jobIDKey, atomic.AddUint64(&jobID, 1))
 
 	if err := appConfig.stepAuth(ctx); err != nil {
 		if ctx.Err() != nil {
@@ -117,36 +125,28 @@ func (appConfig *AppConfig) handleProcess(w http.ResponseWriter, r *http.Request
 	}
 
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("Processed successfully"))
+	w.Write(successfulResp)
 }
 
 func (appConfig *AppConfig) stepAuth(ctx context.Context) error {
-	// MUST respect ctx.Done()
+	t := time.NewTimer(time.Duration(rand.Intn(500)) * time.Millisecond)
+	defer t.Stop()
 	select {
 	case <-ctx.Done():
-		{
-			return ctx.Err()
-		}
-	case <-time.After(time.Duration(rand.Intn(500)) * time.Millisecond):
-		{
-			// Simulate work
-			return nil
-		}
+		return ctx.Err()
+	case <-t.C:
+		return nil
 	}
 }
 
 func (appConfig *AppConfig) stepValidate(ctx context.Context) error {
-	// MUST respect ctx.Done()
+	t := time.NewTimer(time.Duration(rand.Intn(50)) * time.Millisecond)
+	defer t.Stop()
 	select {
 	case <-ctx.Done():
-		{
-			return ctx.Err()
-		}
-	case <-time.After(time.Duration(rand.Intn(50)) * time.Millisecond):
-		{
-			// Simulate work
-			return nil
-		}
+		return ctx.Err()
+	case <-t.C:
+		return nil
 	}
 }
 
@@ -170,23 +170,20 @@ func (appConfig *AppConfig) stepStore(ctx context.Context) error {
 				appConfig.DB.Token <- struct{}{}
 			}()
 
-			acquiredTime := time.Now()
-			acquiredDuration := time.Duration(rand.Intn(2000)) * time.Millisecond
-			timer := time.NewTimer(acquiredDuration)
-			defer timer.Stop()
-
 			select {
 			case <-ctx.Done(): // User left or Timeout
 				return ctx.Err()
 			case <-appConfig.ctx.Done(): // Global Shutdown
 				return appConfig.ctx.Err()
-			case <-timer.C: // Work completed
-				fmt.Printf(
-					"Job %s: Acquired connection at %v, working for %v\n",
-					ctx.Value(jobIDKey),
-					acquiredTime.Format(time.RFC3339Nano),
-					acquiredDuration,
-				)
+			default:
+				user := db.User{
+					Name:  fmt.Sprintf("User-%v", ctx.Value(jobIDKey)),
+					Email: fmt.Sprintf("user-%v@example.com", ctx.Value(jobIDKey)),
+				}
+
+				if err := appConfig.DB.DB.WithContext(ctx).Create(&user).Error; err != nil {
+					return err
+				}
 				return nil
 			}
 		}
