@@ -2,17 +2,33 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"math/rand"
 	"net/http"
 	"os/signal"
+	"prod-service-patterns/db"
 	"syscall"
 	"time"
+
+	"github.com/google/uuid"
 )
 
-func newHttpHandler() http.Handler {
+const (
+	CAPACITY = 10
+)
+
+type contextKey string
+
+const jobIDKey contextKey = "job_id"
+
+type AppConfig struct {
+	DB *db.Database
+}
+
+func newHttpHandler(appConfig *AppConfig) http.Handler {
 	mux := http.NewServeMux()
-	mux.Handle("/process", http.HandlerFunc(handleProcess))
+	mux.Handle("/process", http.HandlerFunc(appConfig.handleProcess))
 	return mux
 }
 
@@ -26,7 +42,16 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
-	handler := newHttpHandler()
+	db, err := db.NewDatabase(ctx, CAPACITY)
+	if err != nil {
+		log.Fatalf("Failed to setup database: %v\n", err)
+	}
+
+	appConfig := &AppConfig{
+		DB: db,
+	}
+
+	handler := newHttpHandler(appConfig)
 	newHttpServer := &http.Server{
 		Addr:    "localhost:8080",
 		Handler: handler,
@@ -48,10 +73,9 @@ func main() {
 	}
 
 	log.Println("Server exited properly")
-
 }
 
-func handleProcess(w http.ResponseWriter, r *http.Request) {
+func (appConfig *AppConfig) handleProcess(w http.ResponseWriter, r *http.Request) {
 	// 1. Create a derived context with a 2-second timeout
 	// 2. Call the steps in order: stepAuth -> stepValidate -> stepStore
 	// 3. If any step returns an error (including context timeout), return an appropriate HTTP error
@@ -59,7 +83,9 @@ func handleProcess(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 	defer cancel()
 
-	if err := stepAuth(ctx); err != nil {
+	ctx = context.WithValue(ctx, jobIDKey, uuid.New().String())
+
+	if err := appConfig.stepAuth(ctx); err != nil {
 		if ctx.Err() != nil {
 			http.Error(w, ctx.Err().Error(), http.StatusGatewayTimeout)
 			return
@@ -69,7 +95,7 @@ func handleProcess(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := stepValidate(ctx); err != nil {
+	if err := appConfig.stepValidate(ctx); err != nil {
 		if ctx.Err() != nil {
 			http.Error(w, ctx.Err().Error(), http.StatusGatewayTimeout)
 			return
@@ -78,7 +104,7 @@ func handleProcess(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := stepStore(ctx); err != nil {
+	if err := appConfig.stepStore(ctx); err != nil {
 		if ctx.Err() != nil {
 			http.Error(w, ctx.Err().Error(), http.StatusGatewayTimeout)
 			return
@@ -89,10 +115,9 @@ func handleProcess(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("Processed successfully"))
-
 }
 
-func stepAuth(ctx context.Context) error {
+func (appConfig *AppConfig) stepAuth(ctx context.Context) error {
 	// MUST respect ctx.Done()
 	select {
 	case <-ctx.Done():
@@ -105,11 +130,9 @@ func stepAuth(ctx context.Context) error {
 			return nil
 		}
 	}
-
 }
 
-func stepValidate(ctx context.Context) error {
-
+func (appConfig *AppConfig) stepValidate(ctx context.Context) error {
 	// MUST respect ctx.Done()
 	select {
 	case <-ctx.Done():
@@ -122,11 +145,9 @@ func stepValidate(ctx context.Context) error {
 			return nil
 		}
 	}
-
 }
 
-func stepStore(ctx context.Context) error {
-
+func (appConfig *AppConfig) stepStore(ctx context.Context) error {
 	// MUST respect ctx.Done()
 
 	select {
@@ -134,10 +155,29 @@ func stepStore(ctx context.Context) error {
 		{
 			return ctx.Err()
 		}
-	case <-time.After(time.Duration(rand.Intn(2000)) * time.Millisecond):
+	case <-appConfig.DB.Token:
 		{
-			// Simulate work
-			return nil
+			defer func() {
+				appConfig.DB.Token <- struct{}{}
+			}()
+
+			acquiredTime := time.Now()
+			acquiredDuration := time.Duration(rand.Intn(2000)) * time.Millisecond
+			timer := time.NewTimer(acquiredDuration)
+			defer timer.Stop()
+
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-timer.C:
+				fmt.Printf(
+					"Job %s: Acquired connection at %v, working for %v\n",
+					ctx.Value(jobIDKey),
+					acquiredTime.Format(time.RFC3339Nano),
+					acquiredDuration,
+				)
+				return nil
+			}
 		}
 	}
 }
