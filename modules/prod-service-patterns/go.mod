@@ -3,7 +3,6 @@ module prod-service-patterns
 go 1.25.6
 
 require (
-	github.com/google/uuid v1.6.0
 	gorm.io/driver/sqlite v1.6.0
 	gorm.io/gorm v1.31.1
 )

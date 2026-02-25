@@ -6,7 +6,7 @@ import (
 	"log"
 	"math/rand"
 	"net/http"
-	_ "net/http/pprof"
+	"net/http/pprof"
 	"os/signal"
 	"sync/atomic"
 	"syscall"
@@ -38,6 +38,35 @@ func newHttpHandler(appConfig *AppConfig) http.Handler {
 	return mux
 }
 
+func setupPProf(ctx context.Context) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/debug/pprof/", pprof.Index)
+	mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
+	mux.HandleFunc("/debug/pprof/heap", pprof.Index)
+	mux.HandleFunc("/debug/pprof/goroutine", pprof.Index)
+	mux.HandleFunc("/debug/pprof/block", pprof.Index)
+	mux.HandleFunc("/debug/pprof/threadcreate", pprof.Index)
+	mux.HandleFunc("/debug/pprof/cmdline", pprof.Index)
+	mux.HandleFunc("/debug/pprof/symbol", pprof.Index)
+	mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
+
+	server := &http.Server{Addr: "127.0.0.1:9000", Handler: mux}
+	go func() {
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("Could not listen on %s: %v\n", "127.0.0.1:9000", err)
+		}
+	}()
+
+	<-ctx.Done()
+
+	log.Println("Shutting down pprof server...")
+
+	if err := server.Shutdown(context.Background()); err != nil {
+		log.Fatalf("Server forced to shutdown: %v\n", err)
+	}
+
+}
+
 func main() {
 	// 1. Setup Signal handling for Graceful Shutdown
 	// 2. Initialize the http.Server
@@ -48,9 +77,7 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
-	go func() {
-		log.Println(http.ListenAndServe("localhost:6060", nil))
-	}()
+	go setupPProf(ctx)
 
 	db, err := db.NewDatabase(ctx, CAPACITY)
 	if err != nil {

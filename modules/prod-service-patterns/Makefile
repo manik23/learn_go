@@ -2,7 +2,7 @@
 
 # Parameters
 PORT=8080
-PPROF_PORT=6060
+PPROF_PORT=9000
 SERVER_URL=http://localhost:$(PORT)/process
 PPROF_URL=http://localhost:$(PPROF_PORT)/debug/pprof
 
