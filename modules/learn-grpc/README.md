@@ -97,6 +97,8 @@ Instead of looking inside the message body, we use **gRPC Metadata** (HTTP/2 Hea
 - Ensure you use `paths=source_relative` to maintain sane import paths in large Go projects.
 
 ### 5. Protobuf Keywords & Type Reference
+
+### 5. Protobuf Keywords & Type Reference
 | Keyword | Purpose | Example |
 | :--- | :--- | :--- |
 | `syntax` | Defines the proto version. | `syntax = "proto3";` |
@@ -191,6 +193,68 @@ return handler(srv, wrapped)
 In a production Go service, a single `panic` in a handler should never bring down the entire server. 
 - **Pattern**: Always wrap your interceptor logic (especially those that start chains) in a `defer recover()` block.
 - **Enhanced Safety**: Use `grpc.ChainUnaryInterceptor` and `grpc.ChainStreamInterceptor` to ensure a dedicated Recovery interceptor is the **first** line of defense.
+
+### 5. 📊 Prometheus: The Observability Standard
+
+Prometheus is an open-source systems monitoring and alerting toolkit. It is the industry standard for cloud-native observability because it uses a **Pull Model** (the server scrapes the targets) and a powerful query language (**PromQL**).
+
+#### **Core Metric Types**
+
+| Type | Purpose | Behavior |
+| :--- | :--- | :--- |
+| **Counter** | Track totals | Only goes **up** (e.g., `requests_total`). Resets to 0 only on restart. |
+| **Gauge** | Track current state | Can go **up and down** (e.g., `current_memory_usage`, `active_goroutines`). |
+| **Histogram** | Track distributions | Samples observations (e.g., request duration) and counts them in configurable buckets. |
+| **Summary** | Track quantiles | Similar to histogram, but calculates configurable quantiles (e.g., p95, p99) over a sliding time window. |
+
+
+| Type | Purpose | Behavior | Example Code |
+| :--- | :--- | :--- | :--- |
+| **Counter** | Track totals | Goes **up** only. | `prometheus.NewCounter(...)` |
+| **Gauge** | Track state | Goes **up and down**. | `prometheus.NewGauge(...)` |
+| **Histogram** | Distributions | Counts into buckets. | `prometheus.NewHistogram(...)` |
+
+```go
+var (
+    // Count events: How many times has this happened?
+    tasksCompleted = prometheus.NewCounter(prometheus.CounterOpts{Name: "tasks_completed_total"})
+
+    // Current state: How many users are online RIGHT NOW?
+    activeConnections = prometheus.NewGauge(prometheus.GaugeOpts{Name: "active_connections"})
+
+    // Latency distribution: How long do requests take (with buckets)?
+    requestDuration = prometheus.NewHistogram(prometheus.HistogramOpts{
+        Name:    "request_duration_seconds",
+        Buckets: prometheus.DefBuckets,
+    })
+)
+```
+
+#### **Labels: The Power of Dimensions**
+Labels allow you to attach metadata to a single metric name, turning one number into a multi-dimensional matrix.
+- **Example**: `learn_grpc_greetings_total{method="SayHello", version="1.0.0"}`
+
+**Real-world Query (PromQL): Calculate p99 Latency per Method**
+Labels enable you to calculate complex statistics across different dimensions. To find the 99th percentile latency of all `OK` requests over the last 5 minutes:
+```promql
+histogram_quantile(0.99, 
+  sum by (le, method) (
+    rate(grpc_server_handling_seconds_bucket{status="OK"}[5m])
+  )
+)
+```
+*This query tells you the latency threshold that 99% of your "Healthy" requests fall under, grouped by the RPC method.*
+
+#### **⚠️ Senior Warning: Cardinality Explosion**
+Every unique combination of labels creates a new **time series** in Prometheus.
+- **Safe**: `method`, `status_code`, `client_version` (Low cardinality, < 100 values).
+- **Dangerous**: `user_id`, `request_id`, `email` (High cardinality, millions of values).
+- **Consequence**: High cardinality will consume all RAM on your Prometheus server and crash the monitoring infrastructure.
+
+#### **Implementation Strategy**
+In this project, we used two layers of observability:
+1.  **Automated**: Using `go-grpc-prometheus` interceptors to catch standard gRPC metrics (Latency, Status Codes).
+2.  **Custom**: Defining a `totalGreetings` vector in `metrics.go` to track business events with specific labels like `client_version`.
 
 ---
 

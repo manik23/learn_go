@@ -28,6 +28,14 @@ run-client:
 	@echo "Starting gRPC client..."
 	go run ./client/...
 
+metrics-grpc:
+	@echo "Fetching metrics from prometheus server..."
+	curl -s localhost:2112/metrics | grep ^grpc
+
+metrics-raw:
+	@echo "Fetching raw metrics from prometheus server..."
+	curl -s localhost:2112/metrics
+
 clean:
 	@echo "Cleaning up generated files..."
 	rm -rf proto/*.pb.go

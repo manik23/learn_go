@@ -10,7 +10,7 @@ This path focuses on high-performance, resilient, and production-grade Go engine
 | :--- | :--- | :--- | :--- |
 | 1 | **Production Go Service Patterns** | ✅ Completed | Context propagation, Graceful Shutdown, Connection Pooling, Backpressure. |
 | 2 | **Performance Engineering** | ✅ Completed | `pprof` (CPU/Heap), Flame Graphs, Allocation Optimization, `Benchmark` logic vs network overhead. |
-| 3 | **gRPC Deeply** | 🏗️ In Progress | Unary/Streaming, Interceptors, Protobuf Design, Metadata Pattern. |
+| 3 | **gRPC Deeply** | ✅ Completed | Unary/Streaming/Bidi, Interceptors, Protobuf Design, Prometheus Metrics. |
 | 4 | **Linux/Networking Systems** | 📅 To Do | TCP/HTTP2 internals, `epoll`, Kernel boundaries, NIC queues. |
 | 5 | **Envoy + xDS Control Plane** | 📅 To Do | LDS/RDS/CDS/EDS, Config versioning, Rollout safety. |
 | 6 | **Cloud Control-Plane Architecture** | 📅 To Do | Idempotency, Reconciliation loops, Leader election, Sharding. |

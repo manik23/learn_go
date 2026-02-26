@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"net"
+	"net/http"
 	"strconv"
 	"time"
 
@@ -16,6 +17,9 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
+
+	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 type contextKey string
@@ -28,6 +32,7 @@ const (
 	RequestAPIKey     contextKey = "x-api-key"
 	RequestVersionKey contextKey = "x-client-version"
 	RequestIDKey      contextKey = "x-request-id"
+	MetricsPort                  = ":2112"
 )
 
 type server struct {
@@ -124,6 +129,9 @@ func (s *server) SayHello(ctx context.Context, in *pb.HelloRequest) (*pb.HelloRe
 
 	logRequestID(ctx)
 
+	// Increment custom metric
+	incrementTotalGreetings(ctx)
+
 	timer := time.NewTimer(time.Second)
 	defer timer.Stop()
 
@@ -131,6 +139,7 @@ func (s *server) SayHello(ctx context.Context, in *pb.HelloRequest) (*pb.HelloRe
 	case <-ctx.Done():
 		return nil, status.Errorf(codes.DeadlineExceeded, "deadline exceeded: %v", ctx.Err())
 	case <-timer.C:
+
 		return &pb.HelloReply{
 			Message:   "Hello " + in.GetName(),
 			Timestamp: timestamppb.Now(),
@@ -141,6 +150,10 @@ func (s *server) SayHello(ctx context.Context, in *pb.HelloRequest) (*pb.HelloRe
 func (s *server) StreamHello(in *pb.HelloRequest, stream pb.Greeter_StreamHelloServer) error {
 	log.Printf("Streaming to: %v", in.GetName())
 	logRequestID(stream.Context())
+
+	// Increment custom metric for each chat message
+	incrementTotalGreetings(stream.Context())
+
 	for i := 0; i < 5; i++ {
 		msg := fmt.Sprintf("Hello %s (message %d)", in.GetName(), i+1)
 		if stream.Context().Err() != nil {
@@ -153,6 +166,7 @@ func (s *server) StreamHello(in *pb.HelloRequest, stream pb.Greeter_StreamHelloS
 			return err
 		}
 		time.Sleep(500 * time.Millisecond)
+
 	}
 	return nil
 }
@@ -185,6 +199,7 @@ func (s *server) Chat(stream pb.Greeter_ChatServer) error {
 
 	for {
 		logRequestID(stream.Context())
+
 		req, err := stream.Recv()
 		if err != nil {
 			if err == io.EOF {
@@ -205,6 +220,8 @@ func (s *server) Chat(stream pb.Greeter_ChatServer) error {
 			return err
 		}
 
+		// Increment custom metric for each chat message
+		incrementTotalGreetings(stream.Context())
 		log.Printf("Chat Received: %v", req.GetName())
 	}
 }
@@ -214,11 +231,39 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
+
 	s := grpc.NewServer(
-		grpc.ChainUnaryInterceptor(VersionInterceptor),
-		grpc.ChainStreamInterceptor(VersionStreamInterceptor),
+		grpc.ChainUnaryInterceptor(
+			grpc_prometheus.UnaryServerInterceptor,
+			VersionInterceptor,
+		),
+		grpc.ChainStreamInterceptor(
+			grpc_prometheus.StreamServerInterceptor,
+			VersionStreamInterceptor,
+		),
 	)
+
+	// Register your gRPC service
 	pb.RegisterGreeterServer(s, &server{})
+
+	// Initialize all metrics
+	grpc_prometheus.Register(s)
+
+	// Register custom metrics
+	registerCustomMetrics()
+
+	// Register prometheus metrics handler
+	http.Handle("/metrics", promhttp.Handler())
+
+	// Start an HTTP server to expose metrics
+	go func() {
+		log.Printf("Metrics server listening at %s/metrics", MetricsPort)
+		if err := http.ListenAndServe(MetricsPort, nil); err != nil {
+			log.Fatalf("failed to serve metrics: %v", err)
+		}
+	}()
+
+	// Start gRPC server and block until error
 	log.Printf("server listening at %v", lis.Addr())
 	if err := s.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)
