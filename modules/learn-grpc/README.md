@@ -256,6 +256,52 @@ In this project, we used two layers of observability:
 1.  **Automated**: Using `go-grpc-prometheus` interceptors to catch standard gRPC metrics (Latency, Status Codes).
 2.  **Custom**: Defining a `totalGreetings` vector in `metrics.go` to track business events with specific labels like `client_version`.
 
+### 6. 🖼️ Visualization (Prometheus & Grafana)
+
+Visualizing gRPC metrics requires a data pipeline: **gRPC Server** (:2112) ➡️ **Prometheus** (Scraper/DB) ➡️ **Grafana** (Visualization).
+
+#### **Step 1: Configure Prometheus**
+Create a `prometheus.yml` file in the root of the module:
+```yaml
+global:
+  scrape_interval: 5s # High frequency for learning/dev
+
+scrape_configs:
+  - job_name: 'grpc_server'
+    static_configs:
+      - targets: ['host.docker.internal:2112'] # If Prometheus is in Docker
+      # - targets: ['localhost:2112']          # If Prometheus is local
+```
+
+#### **Step 2: Run Prometheus**
+Run Prometheus via Docker to scrape your local Go server:
+```bash
+docker run -d \
+  --name prometheus \
+  -p 9090:9090 \
+  -v $(pwd)/prometheus.yml:/etc/prometheus/prometheus.yml \
+  prom/prometheus
+```
+*Verify: Visit `http://localhost:9090/targets` - the `grpc_server` should be **UP**.*
+
+#### **Step 3: Setup Grafana**
+1.  **Add Data Source**:
+    - Open Grafana (`localhost:3000`).
+    - Go to **Connections > Data Sources > Add Data Source**.
+    - Select **Prometheus**.
+    - URL: `http://host.docker.internal:9090` (mac/win) or `http://localhost:9090`.
+2.  **Create Dashboards**:
+    - **Option A (The Pro Way)**: Import **Dashboard ID: 9186**. This provides instant p99 latency, throughput, and error charts for `go-grpc-prometheus`.
+    - **Option B (Custom)**: Add a new panel and use PromQL.
+
+#### **Step 4: Useful PromQL Queries**
+| Analysis | Query |
+| :--- | :--- |
+| **Throughput** | `sum(rate(grpc_server_started_total[1m])) by (grpc_method)` |
+| **p99 Latency** | `histogram_quantile(0.99, sum by (le) (rate(grpc_server_handling_seconds_bucket[5m])))` |
+| **Error Rate %** | `sum(rate(grpc_server_handled_total{grpc_code!="OK"}[5m])) / sum(rate(grpc_server_handled_total[5m]))` |
+| **Custom Greeting Count** | `learn_grpc_greetings_total` |
+
 ---
 
 ## 🏆 Key Takeaways for Senior Review

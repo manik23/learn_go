@@ -1,0 +1,8 @@
+global:
+  scrape_interval: 5s # Scrape every 5 seconds for "real-time" feel
+
+scrape_configs:
+  - job_name: 'grpc_server'
+    static_configs:
+      - targets: ['host.docker.internal:2112'] # Use this if running Prometheus in Docker
+      # - targets: ['localhost:2112']          # Use this if running Prometheus binary locally
