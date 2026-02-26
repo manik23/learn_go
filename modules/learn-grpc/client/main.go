@@ -109,7 +109,6 @@ func main() {
 }
 
 func startChat(c pb.GreeterClient) {
-
 	// Server Streaming RPC
 	log.Printf("Calling StreamHello...")
 	streamCtx, streamCancel := context.WithTimeout(
@@ -201,5 +200,4 @@ func startChat(c pb.GreeterClient) {
 
 		}
 	}
-
 }

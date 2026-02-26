@@ -40,6 +40,12 @@ func VersionInterceptor(
 	info *grpc.UnaryServerInfo,
 	handler grpc.UnaryHandler,
 ) (any, error) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("panic recovered: %v", r)
+		}
+	}()
+
 	if ctx.Err() != nil {
 		return nil, status.Errorf(codes.DeadlineExceeded, "deadline exceeded: %v", ctx.Err())
 	}
@@ -68,6 +74,12 @@ func VersionStreamInterceptor(
 	info *grpc.StreamServerInfo,
 	handler grpc.StreamHandler,
 ) error {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("panic recovered: %v", r)
+		}
+	}()
+
 	ctx := stream.Context()
 	if ctx.Err() != nil {
 		return status.Errorf(codes.DeadlineExceeded, "deadline exceeded: %v", ctx.Err())
@@ -130,7 +142,6 @@ func (s *server) StreamHello(in *pb.HelloRequest, stream pb.Greeter_StreamHelloS
 }
 
 func (s *server) Chat(stream pb.Greeter_ChatServer) error {
-
 	count := 0
 	go func() {
 		for {
