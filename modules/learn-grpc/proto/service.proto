@@ -14,6 +14,10 @@ service Greeter {
 
   // Sends another greeting (Server Streaming)
   rpc StreamHello (HelloRequest) returns (stream HelloReply) {}
+
+  // Sends another greeting (Bidirectional Streaming)
+  rpc Chat (stream HelloRequest) returns (stream HelloReply) {}
+
 }
 
 message Version {

@@ -21,6 +21,7 @@ const _ = grpc.SupportPackageIsVersion9
 const (
 	Greeter_SayHello_FullMethodName    = "/learn_grpc.Greeter/SayHello"
 	Greeter_StreamHello_FullMethodName = "/learn_grpc.Greeter/StreamHello"
+	Greeter_Chat_FullMethodName        = "/learn_grpc.Greeter/Chat"
 )
 
 // GreeterClient is the client API for Greeter service.
@@ -33,6 +34,8 @@ type GreeterClient interface {
 	SayHello(ctx context.Context, in *HelloRequest, opts ...grpc.CallOption) (*HelloReply, error)
 	// Sends another greeting (Server Streaming)
 	StreamHello(ctx context.Context, in *HelloRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[HelloReply], error)
+	// Sends another greeting (Bidirectional Streaming)
+	Chat(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[HelloRequest, HelloReply], error)
 }
 
 type greeterClient struct {
@@ -72,6 +75,19 @@ func (c *greeterClient) StreamHello(ctx context.Context, in *HelloRequest, opts 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type Greeter_StreamHelloClient = grpc.ServerStreamingClient[HelloReply]
 
+func (c *greeterClient) Chat(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[HelloRequest, HelloReply], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &Greeter_ServiceDesc.Streams[1], Greeter_Chat_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[HelloRequest, HelloReply]{ClientStream: stream}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type Greeter_ChatClient = grpc.BidiStreamingClient[HelloRequest, HelloReply]
+
 // GreeterServer is the server API for Greeter service.
 // All implementations must embed UnimplementedGreeterServer
 // for forward compatibility.
@@ -82,6 +98,8 @@ type GreeterServer interface {
 	SayHello(context.Context, *HelloRequest) (*HelloReply, error)
 	// Sends another greeting (Server Streaming)
 	StreamHello(*HelloRequest, grpc.ServerStreamingServer[HelloReply]) error
+	// Sends another greeting (Bidirectional Streaming)
+	Chat(grpc.BidiStreamingServer[HelloRequest, HelloReply]) error
 	mustEmbedUnimplementedGreeterServer()
 }
 
@@ -97,6 +115,9 @@ func (UnimplementedGreeterServer) SayHello(context.Context, *HelloRequest) (*Hel
 }
 func (UnimplementedGreeterServer) StreamHello(*HelloRequest, grpc.ServerStreamingServer[HelloReply]) error {
 	return status.Error(codes.Unimplemented, "method StreamHello not implemented")
+}
+func (UnimplementedGreeterServer) Chat(grpc.BidiStreamingServer[HelloRequest, HelloReply]) error {
+	return status.Error(codes.Unimplemented, "method Chat not implemented")
 }
 func (UnimplementedGreeterServer) mustEmbedUnimplementedGreeterServer() {}
 func (UnimplementedGreeterServer) testEmbeddedByValue()                 {}
@@ -148,6 +169,13 @@ func _Greeter_StreamHello_Handler(srv interface{}, stream grpc.ServerStream) err
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type Greeter_StreamHelloServer = grpc.ServerStreamingServer[HelloReply]
 
+func _Greeter_Chat_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(GreeterServer).Chat(&grpc.GenericServerStream[HelloRequest, HelloReply]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type Greeter_ChatServer = grpc.BidiStreamingServer[HelloRequest, HelloReply]
+
 // Greeter_ServiceDesc is the grpc.ServiceDesc for Greeter service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -165,6 +193,12 @@ var Greeter_ServiceDesc = grpc.ServiceDesc{
 			StreamName:    "StreamHello",
 			Handler:       _Greeter_StreamHello_Handler,
 			ServerStreams: true,
+		},
+		{
+			StreamName:    "Chat",
+			Handler:       _Greeter_Chat_Handler,
+			ServerStreams: true,
+			ClientStreams: true,
 		},
 	},
 	Metadata: "proto/service.proto",

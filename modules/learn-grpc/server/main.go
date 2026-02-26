@@ -3,8 +3,10 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"net"
+	"strconv"
 	"time"
 
 	pb "learn-grpc/proto"
@@ -125,6 +127,59 @@ func (s *server) StreamHello(in *pb.HelloRequest, stream pb.Greeter_StreamHelloS
 		time.Sleep(500 * time.Millisecond)
 	}
 	return nil
+}
+
+func (s *server) Chat(stream pb.Greeter_ChatServer) error {
+
+	count := 0
+	go func() {
+		for {
+			select {
+			case <-stream.Context().Done():
+				{
+					log.Println("Chat Server Sending Error: ", stream.Context().Err().Error())
+					return
+				}
+
+			case <-time.After(500 * time.Millisecond):
+				{
+					count++
+					if err := stream.Send(&pb.HelloReply{
+						Message:   "From Chat Server " + strconv.Itoa(count),
+						Timestamp: timestamppb.Now(),
+					}); err != nil {
+						log.Println("Chat Server Sending Error: ", err.Error())
+						return
+					}
+				}
+			}
+		}
+	}()
+
+	for {
+		logRequestID(stream.Context())
+		req, err := stream.Recv()
+		if err != nil {
+			if err == io.EOF {
+				log.Println("Server Chat Received EOF: ", err.Error())
+				return nil
+			}
+
+			if status.Code(err) == codes.Canceled {
+				log.Println("Server Chat Received Canceled: ", err.Error())
+				return status.Error(codes.Canceled, "client cancelled")
+			}
+
+			if status.Code(err) == codes.DeadlineExceeded {
+				return status.Error(codes.DeadlineExceeded, "deadline exceeded")
+			}
+
+			log.Println("Server Chat Received Error: ", err.Error())
+			return err
+		}
+
+		log.Printf("Chat Received: %v", req.GetName())
+	}
 }
 
 func main() {

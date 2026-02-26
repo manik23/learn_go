@@ -104,4 +104,102 @@ func main() {
 			reply.GetTimestamp().AsTime().Format(time.RFC1123),
 		)
 	}
+
+	startChat(c)
+}
+
+func startChat(c pb.GreeterClient) {
+
+	// Server Streaming RPC
+	log.Printf("Calling StreamHello...")
+	streamCtx, streamCancel := context.WithTimeout(
+		context.Background(),
+		time.Duration(rand.Intn(100))*time.Second,
+	)
+	// Add Metadata
+	streamCtx = setupMetadata(streamCtx)
+	defer streamCancel()
+
+	chat, err := c.Chat(streamCtx)
+	if err != nil {
+		log.Fatalf("could not open chat: %v", err)
+	}
+
+	go func() {
+		for {
+			req, err := chat.Recv()
+			if err != nil {
+				if errors.Is(err, io.EOF) {
+					log.Printf("stream closed")
+				} else {
+					switch status.Code(err) {
+					case codes.DeadlineExceeded:
+						log.Printf("deadline exceeded during StreamHello: %s", err.Error())
+					case codes.InvalidArgument:
+						log.Printf("invalid argument during StreamHello: %s", err.Error())
+					case codes.Unimplemented:
+						log.Printf("unimplemented during StreamHello: %s", err.Error())
+					default:
+						log.Printf("%v.ReceivingChatStreamHello(_) = _, %v", c, err)
+					}
+				}
+				streamCancel()
+				return
+			}
+
+			log.Printf(
+				"Stream Reply: %s : %s",
+				req.GetMessage(),
+				req.GetTimestamp().AsTime().Format(time.RFC1123),
+			)
+		}
+	}()
+
+	count := 0
+
+	for {
+		select {
+		case <-streamCtx.Done():
+			{
+				log.Printf("Chat Ended: %s", streamCtx.Err())
+				return
+			}
+
+		case <-time.After(1 * time.Second):
+			{
+				count++
+
+				if count > 10 {
+					log.Printf("Closing Send Stream")
+					if err := chat.CloseSend(); err != nil {
+						log.Printf("error closing stream: %v", err)
+					}
+					streamCancel()
+					return
+				}
+
+				if err := chat.Send(&pb.HelloRequest{Name: "Gopher"}); err != nil {
+					if errors.Is(err, io.EOF) {
+						log.Printf("stream closed")
+					} else {
+						switch status.Code(err) {
+						case codes.DeadlineExceeded:
+							log.Printf("deadline exceeded during StreamHello: %s", err.Error())
+						case codes.InvalidArgument:
+							log.Printf("invalid argument during StreamHello: %s", err.Error())
+						case codes.Unimplemented:
+							log.Printf("unimplemented during StreamHello: %s", err.Error())
+						default:
+							log.Printf("%v.SendingChatStreamHello(_) = _, %v", c, err)
+							streamCancel()
+							return
+						}
+					}
+				}
+
+			}
+
+		}
+	}
+
 }

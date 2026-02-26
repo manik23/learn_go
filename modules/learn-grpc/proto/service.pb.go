@@ -186,10 +186,11 @@ const file_proto_service_proto_rawDesc = "" +
 	"HelloReply\x12\x18\n" +
 	"\amessage\x18\x01 \x01(\tR\amessage\x128\n" +
 	"\ttimestamp\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\ttimestamp\x12-\n" +
-	"\aversion\x18\x03 \x01(\v2\x13.learn_grpc.VersionR\aversion2\x8e\x01\n" +
+	"\aversion\x18\x03 \x01(\v2\x13.learn_grpc.VersionR\aversion2\xce\x01\n" +
 	"\aGreeter\x12>\n" +
 	"\bSayHello\x12\x18.learn_grpc.HelloRequest\x1a\x16.learn_grpc.HelloReply\"\x00\x12C\n" +
-	"\vStreamHello\x12\x18.learn_grpc.HelloRequest\x1a\x16.learn_grpc.HelloReply\"\x000\x01B\tZ\a./protob\x06proto3"
+	"\vStreamHello\x12\x18.learn_grpc.HelloRequest\x1a\x16.learn_grpc.HelloReply\"\x000\x01\x12>\n" +
+	"\x04Chat\x12\x18.learn_grpc.HelloRequest\x1a\x16.learn_grpc.HelloReply\"\x00(\x010\x01B\tZ\a./protob\x06proto3"
 
 var (
 	file_proto_service_proto_rawDescOnce sync.Once
@@ -215,10 +216,12 @@ var file_proto_service_proto_depIdxs = []int32{
 	0, // 1: learn_grpc.HelloReply.version:type_name -> learn_grpc.Version
 	1, // 2: learn_grpc.Greeter.SayHello:input_type -> learn_grpc.HelloRequest
 	1, // 3: learn_grpc.Greeter.StreamHello:input_type -> learn_grpc.HelloRequest
-	2, // 4: learn_grpc.Greeter.SayHello:output_type -> learn_grpc.HelloReply
-	2, // 5: learn_grpc.Greeter.StreamHello:output_type -> learn_grpc.HelloReply
-	4, // [4:6] is the sub-list for method output_type
-	2, // [2:4] is the sub-list for method input_type
+	1, // 4: learn_grpc.Greeter.Chat:input_type -> learn_grpc.HelloRequest
+	2, // 5: learn_grpc.Greeter.SayHello:output_type -> learn_grpc.HelloReply
+	2, // 6: learn_grpc.Greeter.StreamHello:output_type -> learn_grpc.HelloReply
+	2, // 7: learn_grpc.Greeter.Chat:output_type -> learn_grpc.HelloReply
+	5, // [5:8] is the sub-list for method output_type
+	2, // [2:5] is the sub-list for method input_type
 	2, // [2:2] is the sub-list for extension type_name
 	2, // [2:2] is the sub-list for extension extendee
 	0, // [0:2] is the sub-list for field type_name
