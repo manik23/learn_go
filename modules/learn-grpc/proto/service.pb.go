@@ -9,6 +9,7 @@ package proto
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
@@ -21,17 +22,62 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type Version struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Version       string                 `protobuf:"bytes,1,opt,name=version,proto3" json:"version,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Version) Reset() {
+	*x = Version{}
+	mi := &file_proto_service_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Version) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Version) ProtoMessage() {}
+
+func (x *Version) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_service_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Version.ProtoReflect.Descriptor instead.
+func (*Version) Descriptor() ([]byte, []int) {
+	return file_proto_service_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *Version) GetVersion() string {
+	if x != nil {
+		return x.Version
+	}
+	return ""
+}
+
 // The request message containing the user's name.
 type HelloRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Version       *Version               `protobuf:"bytes,2,opt,name=version,proto3" json:"version,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *HelloRequest) Reset() {
 	*x = HelloRequest{}
-	mi := &file_proto_service_proto_msgTypes[0]
+	mi := &file_proto_service_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -43,7 +89,7 @@ func (x *HelloRequest) String() string {
 func (*HelloRequest) ProtoMessage() {}
 
 func (x *HelloRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[0]
+	mi := &file_proto_service_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -56,7 +102,7 @@ func (x *HelloRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HelloRequest.ProtoReflect.Descriptor instead.
 func (*HelloRequest) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{0}
+	return file_proto_service_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *HelloRequest) GetName() string {
@@ -66,17 +112,26 @@ func (x *HelloRequest) GetName() string {
 	return ""
 }
 
+func (x *HelloRequest) GetVersion() *Version {
+	if x != nil {
+		return x.Version
+	}
+	return nil
+}
+
 // The response message containing the greetings.
 type HelloReply struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Message       string                 `protobuf:"bytes,1,opt,name=message,proto3" json:"message,omitempty"`
+	Timestamp     *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
+	Version       *Version               `protobuf:"bytes,3,opt,name=version,proto3" json:"version,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *HelloReply) Reset() {
 	*x = HelloReply{}
-	mi := &file_proto_service_proto_msgTypes[1]
+	mi := &file_proto_service_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -88,7 +143,7 @@ func (x *HelloReply) String() string {
 func (*HelloReply) ProtoMessage() {}
 
 func (x *HelloReply) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[1]
+	mi := &file_proto_service_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -101,7 +156,7 @@ func (x *HelloReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HelloReply.ProtoReflect.Descriptor instead.
 func (*HelloReply) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{1}
+	return file_proto_service_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *HelloReply) GetMessage() string {
@@ -111,17 +166,36 @@ func (x *HelloReply) GetMessage() string {
 	return ""
 }
 
+func (x *HelloReply) GetTimestamp() *timestamppb.Timestamp {
+	if x != nil {
+		return x.Timestamp
+	}
+	return nil
+}
+
+func (x *HelloReply) GetVersion() *Version {
+	if x != nil {
+		return x.Version
+	}
+	return nil
+}
+
 var File_proto_service_proto protoreflect.FileDescriptor
 
 const file_proto_service_proto_rawDesc = "" +
 	"\n" +
 	"\x13proto/service.proto\x12\n" +
-	"learn_grpc\"\"\n" +
+	"learn_grpc\x1a\x1fgoogle/protobuf/timestamp.proto\"#\n" +
+	"\aVersion\x12\x18\n" +
+	"\aversion\x18\x01 \x01(\tR\aversion\"Q\n" +
 	"\fHelloRequest\x12\x12\n" +
-	"\x04name\x18\x01 \x01(\tR\x04name\"&\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12-\n" +
+	"\aversion\x18\x02 \x01(\v2\x13.learn_grpc.VersionR\aversion\"\x8f\x01\n" +
 	"\n" +
 	"HelloReply\x12\x18\n" +
-	"\amessage\x18\x01 \x01(\tR\amessage2\x8e\x01\n" +
+	"\amessage\x18\x01 \x01(\tR\amessage\x128\n" +
+	"\ttimestamp\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\ttimestamp\x12-\n" +
+	"\aversion\x18\x03 \x01(\v2\x13.learn_grpc.VersionR\aversion2\x8e\x01\n" +
 	"\aGreeter\x12>\n" +
 	"\bSayHello\x12\x18.learn_grpc.HelloRequest\x1a\x16.learn_grpc.HelloReply\"\x00\x12C\n" +
 	"\vStreamHello\x12\x18.learn_grpc.HelloRequest\x1a\x16.learn_grpc.HelloReply\"\x000\x01B\tZ\a./protob\x06proto3"
@@ -138,21 +212,26 @@ func file_proto_service_proto_rawDescGZIP() []byte {
 	return file_proto_service_proto_rawDescData
 }
 
-var file_proto_service_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
+var file_proto_service_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
 var file_proto_service_proto_goTypes = []any{
-	(*HelloRequest)(nil), // 0: learn_grpc.HelloRequest
-	(*HelloReply)(nil),   // 1: learn_grpc.HelloReply
+	(*Version)(nil),               // 0: learn_grpc.Version
+	(*HelloRequest)(nil),          // 1: learn_grpc.HelloRequest
+	(*HelloReply)(nil),            // 2: learn_grpc.HelloReply
+	(*timestamppb.Timestamp)(nil), // 3: google.protobuf.Timestamp
 }
 var file_proto_service_proto_depIdxs = []int32{
-	0, // 0: learn_grpc.Greeter.SayHello:input_type -> learn_grpc.HelloRequest
-	0, // 1: learn_grpc.Greeter.StreamHello:input_type -> learn_grpc.HelloRequest
-	1, // 2: learn_grpc.Greeter.SayHello:output_type -> learn_grpc.HelloReply
-	1, // 3: learn_grpc.Greeter.StreamHello:output_type -> learn_grpc.HelloReply
-	2, // [2:4] is the sub-list for method output_type
-	0, // [0:2] is the sub-list for method input_type
-	0, // [0:0] is the sub-list for extension type_name
-	0, // [0:0] is the sub-list for extension extendee
-	0, // [0:0] is the sub-list for field type_name
+	0, // 0: learn_grpc.HelloRequest.version:type_name -> learn_grpc.Version
+	3, // 1: learn_grpc.HelloReply.timestamp:type_name -> google.protobuf.Timestamp
+	0, // 2: learn_grpc.HelloReply.version:type_name -> learn_grpc.Version
+	1, // 3: learn_grpc.Greeter.SayHello:input_type -> learn_grpc.HelloRequest
+	1, // 4: learn_grpc.Greeter.StreamHello:input_type -> learn_grpc.HelloRequest
+	2, // 5: learn_grpc.Greeter.SayHello:output_type -> learn_grpc.HelloReply
+	2, // 6: learn_grpc.Greeter.StreamHello:output_type -> learn_grpc.HelloReply
+	5, // [5:7] is the sub-list for method output_type
+	3, // [3:5] is the sub-list for method input_type
+	3, // [3:3] is the sub-list for extension type_name
+	3, // [3:3] is the sub-list for extension extendee
+	0, // [0:3] is the sub-list for field type_name
 }
 
 func init() { file_proto_service_proto_init() }
@@ -166,7 +245,7 @@ func file_proto_service_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_service_proto_rawDesc), len(file_proto_service_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   2,
+			NumMessages:   3,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
