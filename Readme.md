@@ -32,6 +32,6 @@ This path focuses on high-performance, resilient, and production-grade Go engine
 ---
 
 ## 🚀 How to Resume (Mentor Instructions)
-1. Navigate to the next module in the table (Module 3: gRPC Deeply).
+1. Navigate to the next module in the table (Module 4: Linux/Networking Systems).
 2. Ask the Mentor to initialize the module requirements.
 3. Follow the "Senior Review" feedback loop.
