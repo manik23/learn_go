@@ -12,9 +12,15 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
+const (
+	ClientAddr    = "localhost:50051"
+	ClientTimeout = 5 * time.Second
+	ClientVersion = "1.0.0"
+)
+
 func main() {
 	// Set up a connection to the server.
-	conn, err := grpc.Dial("localhost:50051", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.Dial(ClientAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}
@@ -25,7 +31,7 @@ func main() {
 	log.Printf("Calling SayHello...")
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	r, err := c.SayHello(ctx, &pb.HelloRequest{Name: "Gopher"})
+	r, err := c.SayHello(ctx, &pb.HelloRequest{Name: "Gopher", Version: &pb.Version{Version: ClientVersion}})
 	if err != nil {
 		log.Fatalf("could not greet: %v", err)
 	}
@@ -33,7 +39,7 @@ func main() {
 
 	// Server Streaming RPC
 	log.Printf("Calling StreamHello...")
-	stream, err := c.StreamHello(context.Background(), &pb.HelloRequest{Name: "Gopher"})
+	stream, err := c.StreamHello(context.Background(), &pb.HelloRequest{Name: "Gopher", Version: &pb.Version{Version: ClientVersion}})
 	if err != nil {
 		log.Fatalf("could not open stream: %v", err)
 	}
