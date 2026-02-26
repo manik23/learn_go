@@ -70,7 +70,6 @@ func (x *Version) GetVersion() string {
 type HelloRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	Version       *Version               `protobuf:"bytes,2,opt,name=version,proto3" json:"version,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -110,13 +109,6 @@ func (x *HelloRequest) GetName() string {
 		return x.Name
 	}
 	return ""
-}
-
-func (x *HelloRequest) GetVersion() *Version {
-	if x != nil {
-		return x.Version
-	}
-	return nil
 }
 
 // The response message containing the greetings.
@@ -187,10 +179,9 @@ const file_proto_service_proto_rawDesc = "" +
 	"\x13proto/service.proto\x12\n" +
 	"learn_grpc\x1a\x1fgoogle/protobuf/timestamp.proto\"#\n" +
 	"\aVersion\x12\x18\n" +
-	"\aversion\x18\x01 \x01(\tR\aversion\"Q\n" +
+	"\aversion\x18\x01 \x01(\tR\aversion\"\"\n" +
 	"\fHelloRequest\x12\x12\n" +
-	"\x04name\x18\x01 \x01(\tR\x04name\x12-\n" +
-	"\aversion\x18\x02 \x01(\v2\x13.learn_grpc.VersionR\aversion\"\x8f\x01\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\"\x8f\x01\n" +
 	"\n" +
 	"HelloReply\x12\x18\n" +
 	"\amessage\x18\x01 \x01(\tR\amessage\x128\n" +
@@ -220,18 +211,17 @@ var file_proto_service_proto_goTypes = []any{
 	(*timestamppb.Timestamp)(nil), // 3: google.protobuf.Timestamp
 }
 var file_proto_service_proto_depIdxs = []int32{
-	0, // 0: learn_grpc.HelloRequest.version:type_name -> learn_grpc.Version
-	3, // 1: learn_grpc.HelloReply.timestamp:type_name -> google.protobuf.Timestamp
-	0, // 2: learn_grpc.HelloReply.version:type_name -> learn_grpc.Version
-	1, // 3: learn_grpc.Greeter.SayHello:input_type -> learn_grpc.HelloRequest
-	1, // 4: learn_grpc.Greeter.StreamHello:input_type -> learn_grpc.HelloRequest
-	2, // 5: learn_grpc.Greeter.SayHello:output_type -> learn_grpc.HelloReply
-	2, // 6: learn_grpc.Greeter.StreamHello:output_type -> learn_grpc.HelloReply
-	5, // [5:7] is the sub-list for method output_type
-	3, // [3:5] is the sub-list for method input_type
-	3, // [3:3] is the sub-list for extension type_name
-	3, // [3:3] is the sub-list for extension extendee
-	0, // [0:3] is the sub-list for field type_name
+	3, // 0: learn_grpc.HelloReply.timestamp:type_name -> google.protobuf.Timestamp
+	0, // 1: learn_grpc.HelloReply.version:type_name -> learn_grpc.Version
+	1, // 2: learn_grpc.Greeter.SayHello:input_type -> learn_grpc.HelloRequest
+	1, // 3: learn_grpc.Greeter.StreamHello:input_type -> learn_grpc.HelloRequest
+	2, // 4: learn_grpc.Greeter.SayHello:output_type -> learn_grpc.HelloReply
+	2, // 5: learn_grpc.Greeter.StreamHello:output_type -> learn_grpc.HelloReply
+	4, // [4:6] is the sub-list for method output_type
+	2, // [2:4] is the sub-list for method input_type
+	2, // [2:2] is the sub-list for extension type_name
+	2, // [2:2] is the sub-list for extension extendee
+	0, // [0:2] is the sub-list for field type_name
 }
 
 func init() { file_proto_service_proto_init() }

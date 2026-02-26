@@ -13,6 +13,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
 
@@ -35,7 +36,11 @@ func main() {
 	log.Printf("Calling SayHello...")
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(rand.Intn(2))*time.Second)
 	defer cancel()
-	r, err := c.SayHello(ctx, &pb.HelloRequest{Name: "Gopher", Version: &pb.Version{Version: ClientVersion}})
+
+	// Add Metadata
+	ctx = metadata.AppendToOutgoingContext(ctx, "x-client-version", ClientVersion)
+
+	r, err := c.SayHello(ctx, &pb.HelloRequest{Name: "Gopher"})
 	if err != nil {
 		if status.Code(err) == codes.DeadlineExceeded {
 			log.Printf("deadline exceeded during SayHello: %s", err.Error())
@@ -52,9 +57,13 @@ func main() {
 		time.Duration(rand.Intn(7))*time.Second,
 	)
 	defer streamCancel()
+
+	// Add Metadata
+	streamCtx = metadata.AppendToOutgoingContext(streamCtx, "x-client-version", ClientVersion)
+
 	stream, err := c.StreamHello(
 		streamCtx,
-		&pb.HelloRequest{Name: "Gopher", Version: &pb.Version{Version: ClientVersion}},
+		&pb.HelloRequest{Name: "Gopher"},
 	)
 	if err != nil {
 		log.Fatalf("could not open stream: %v", err)
