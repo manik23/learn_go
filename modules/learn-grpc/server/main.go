@@ -12,6 +12,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 const (
@@ -32,21 +33,49 @@ func validateClientVersion(clientVersion *pb.Version) bool {
 }
 
 func (s *server) SayHello(ctx context.Context, in *pb.HelloRequest) (*pb.HelloReply, error) {
-	if !validateClientVersion(in.GetVersion()) {
-		return nil, status.Errorf(codes.InvalidArgument, "invalid client version: %s", in.GetVersion().GetVersion())
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
 	}
-	log.Printf("Received: %v", in.GetName())
-	return &pb.HelloReply{Message: "Hello " + in.GetName()}, nil
+	if !validateClientVersion(in.GetVersion()) {
+		return nil, status.Errorf(
+			codes.InvalidArgument,
+			"invalid client version: %s",
+			in.GetVersion().GetVersion(),
+		)
+	}
+
+	timer := time.NewTimer(time.Second)
+	defer timer.Stop()
+
+	select {
+	case <-ctx.Done():
+		return nil, status.Errorf(codes.DeadlineExceeded, "deadline exceeded: %v", ctx.Err())
+	case <-timer.C:
+		return &pb.HelloReply{
+			Message:   "Hello " + in.GetName(),
+			Timestamp: timestamppb.Now(),
+		}, nil
+	}
 }
 
 func (s *server) StreamHello(in *pb.HelloRequest, stream pb.Greeter_StreamHelloServer) error {
 	if !validateClientVersion(in.GetVersion()) {
-		return status.Errorf(codes.InvalidArgument, "invalid client version: %s", in.GetVersion().GetVersion())
+		return status.Errorf(
+			codes.InvalidArgument,
+			"invalid client version: %s",
+			in.GetVersion().GetVersion(),
+		)
 	}
 	log.Printf("Streaming to: %v", in.GetName())
 	for i := 0; i < 5; i++ {
 		msg := fmt.Sprintf("Hello %s (message %d)", in.GetName(), i+1)
-		if err := stream.Send(&pb.HelloReply{Message: msg}); err != nil {
+		if stream.Context().Err() != nil {
+			return stream.Context().Err()
+		}
+		if err := stream.Send(&pb.HelloReply{
+			Message:   msg,
+			Timestamp: timestamppb.Now(),
+		}); err != nil {
 			return err
 		}
 		time.Sleep(500 * time.Millisecond)

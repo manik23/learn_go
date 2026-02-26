@@ -2,14 +2,18 @@ package main
 
 import (
 	"context"
+	"errors"
 	"io"
 	"log"
+	"math/rand"
 	"time"
 
 	pb "learn-grpc/proto"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/status"
 )
 
 const (
@@ -20,7 +24,7 @@ const (
 
 func main() {
 	// Set up a connection to the server.
-	conn, err := grpc.Dial(ClientAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(ClientAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}
@@ -29,28 +33,56 @@ func main() {
 
 	// Unary RPC
 	log.Printf("Calling SayHello...")
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(rand.Intn(2))*time.Second)
 	defer cancel()
 	r, err := c.SayHello(ctx, &pb.HelloRequest{Name: "Gopher", Version: &pb.Version{Version: ClientVersion}})
 	if err != nil {
-		log.Fatalf("could not greet: %v", err)
+		if status.Code(err) == codes.DeadlineExceeded {
+			log.Printf("deadline exceeded during SayHello: %s", err.Error())
+		} else {
+			log.Fatalf("could not greet: %s", err.Error())
+		}
 	}
 	log.Printf("Greeting: %s", r.GetMessage())
 
 	// Server Streaming RPC
 	log.Printf("Calling StreamHello...")
-	stream, err := c.StreamHello(context.Background(), &pb.HelloRequest{Name: "Gopher", Version: &pb.Version{Version: ClientVersion}})
+	streamCtx, streamCancel := context.WithTimeout(
+		context.Background(),
+		time.Duration(rand.Intn(7))*time.Second,
+	)
+	defer streamCancel()
+	stream, err := c.StreamHello(
+		streamCtx,
+		&pb.HelloRequest{Name: "Gopher", Version: &pb.Version{Version: ClientVersion}},
+	)
 	if err != nil {
 		log.Fatalf("could not open stream: %v", err)
 	}
 	for {
 		reply, err := stream.Recv()
-		if err == io.EOF {
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				log.Printf("stream closed")
+			} else {
+				switch status.Code(err) {
+				case codes.DeadlineExceeded:
+					log.Printf("deadline exceeded during StreamHello: %s", err.Error())
+				case codes.InvalidArgument:
+					log.Printf("invalid argument during StreamHello: %s", err.Error())
+				case codes.Unimplemented:
+					log.Printf("unimplemented during StreamHello: %s", err.Error())
+				default:
+					log.Fatalf("%v.StreamHello(_) = _, %v", c, err)
+				}
+			}
 			break
 		}
-		if err != nil {
-			log.Fatalf("%v.StreamHello(_) = _, %v", c, err)
-		}
-		log.Printf("Stream Reply: %s", reply.GetMessage())
+
+		log.Printf(
+			"Stream Reply: %s : %s",
+			reply.GetMessage(),
+			reply.GetTimestamp().AsTime().Format(time.RFC1123),
+		)
 	}
 }

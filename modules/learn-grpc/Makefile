@@ -10,6 +10,13 @@ generate:
 	       --go-grpc_out=. --go-grpc_opt=paths=source_relative \
 	       $(PROTO_SRC)
 
+format:
+	@echo "Formatting code..."
+	gofumpt -w ./client/main.go
+	gofumpt -w ./server/main.go
+	golines -w --max-len=110 ./client/main.go
+	golines -w --max-len=110 ./server/main.go
+
 run-server:
 	@echo "Starting gRPC server..."
 	go run server/main.go
