@@ -17,11 +17,23 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+type contextKey string
+
 const (
-	ClientAddr    = "localhost:50051"
-	ClientTimeout = 5 * time.Second
-	ClientVersion = "1.0.0"
+	ClientAddr                   = "localhost:50051"
+	ClientTimeout                = 5 * time.Second
+	ClientVersion                = "1.0.0"
+	RequestAPI                   = "super-secret-key"
+	RequestAPIKey     contextKey = "x-api-key"
+	RequestVersionKey contextKey = "x-client-version"
+	RequestIDKey      contextKey = "x-request-id"
 )
+
+func setupMetadata(ctx context.Context) context.Context {
+	ctx = metadata.AppendToOutgoingContext(ctx, string(RequestVersionKey), ClientVersion)
+	ctx = metadata.AppendToOutgoingContext(ctx, string(RequestAPIKey), RequestAPI)
+	return ctx
+}
 
 func main() {
 	// Set up a connection to the server.
@@ -34,11 +46,9 @@ func main() {
 
 	// Unary RPC
 	log.Printf("Calling SayHello...")
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(rand.Intn(2))*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(rand.Intn(3))*time.Second)
 	defer cancel()
-
-	// Add Metadata
-	ctx = metadata.AppendToOutgoingContext(ctx, "x-client-version", ClientVersion)
+	ctx = setupMetadata(ctx)
 
 	r, err := c.SayHello(ctx, &pb.HelloRequest{Name: "Gopher"})
 	if err != nil {
@@ -56,10 +66,9 @@ func main() {
 		context.Background(),
 		time.Duration(rand.Intn(7))*time.Second,
 	)
-	defer streamCancel()
-
 	// Add Metadata
-	streamCtx = metadata.AppendToOutgoingContext(streamCtx, "x-client-version", ClientVersion)
+	streamCtx = setupMetadata(streamCtx)
+	defer streamCancel()
 
 	stream, err := c.StreamHello(
 		streamCtx,
@@ -68,6 +77,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("could not open stream: %v", err)
 	}
+
 	for {
 		reply, err := stream.Recv()
 		if err != nil {

@@ -12,21 +12,21 @@ generate:
 
 format:
 	@echo "Formatting code..."
-	gofumpt -w ./client/main.go
-	gofumpt -w ./server/main.go
-	golines -w --max-len=110 ./client/main.go
-	golines -w --max-len=110 ./server/main.go
+	gofumpt -w ./client/*.go
+	gofumpt -w ./server/*.go
+	golines -w --max-len=110 ./client/*.go
+	golines -w --max-len=110 ./server/*.go
 
 explain:
 	@cat README.md | sed -n '/## 🔍 Revision Notes/,$p'
 
 run-server:
 	@echo "Starting gRPC server..."
-	go run server/main.go
+	go run ./server/...
 
 run-client:
 	@echo "Starting gRPC client..."
-	go run client/main.go
+	go run ./client/...
 
 clean:
 	@echo "Cleaning up generated files..."

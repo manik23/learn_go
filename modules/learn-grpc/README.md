@@ -139,3 +139,44 @@ message UserProfile {
   }
 }
 ```
+
+## 📡 Advanced Observability & Metadata Patterns
+
+### 1. Interceptor Context Augmentation
+In Unary interceptors, you can generate a Request ID and inject it into the context so that all downstream logic (handlers, database calls, etc.) can use it for tracing.
+
+**The "Incoming Context" Trick**:
+Instead of just using `context.WithValue`, you can modify the **Incoming Metadata**. This allows any downstream logic using `metadata.FromIncomingContext` to see the generated ID as if it was sent by the client.
+```go
+func AddIDToCtx(ctx context.Context) context.Context {
+    md, ok := metadata.FromIncomingContext(ctx)
+    if !ok { md = metadata.New(nil) }
+
+    if ids := md.Get("x-request-id"); len(ids) == 0 {
+        md.Set("x-request-id", uuid.New().String())
+    }
+    // Re-wrap the context with the modified metadata
+    return metadata.NewIncomingContext(ctx, md)
+}
+
+```
+
+### 2. Incoming vs. Outgoing Metadata
+- **Incoming Metadata**: Headers sent by the client to YOU. Use `metadata.FromIncomingContext`.
+- **Outgoing Metadata**: Headers YOU send to a downstream service (if this server acts as a client). Use `metadata.AppendToOutgoingContext`.
+- **Common Gotcha**: Appending to *Outgoing* context does not make the data visible to your own local handlers.
+
+### 3. The "Immutability" of Streams
+In a `StreamServerInterceptor`, you cannot simply update a `ctx` variable and expect the handler to see it. The `grpc.ServerStream` object carries its own context that is established before the interceptor is called.
+- **Why?**: A stream is a long-lived connection. The context represents the lifecycle of that connection.
+- **The Fix**: To propagate new context data into a stream handler, you must use a **Context/Stream Wrapper**. This involves creating a struct that embeds `grpc.ServerStream` and overrides the `Context()` method.
+
+---
+
+## 🏆 Key Takeaways for Senior Review
+
+1.  **Semantics Over Payload**: Always use gRPC Metadata for infrastructure concerns (Auth, Tracing, Versioning). Keep the `.proto` messages strictly for business data.
+2.  **Order Matters in Chaining**: In `grpc.ChainUnaryInterceptor`, the order of execution is Top-to-Bottom. Always place **Recovery** first (to catch panics), then **Auth/Validation**, then **Logging/Observability**.
+3.  **The "Transparent" Trace**: Modifying the **Incoming Context** metadata inside an interceptor is a powerful way to ensure the entire execution tree (even 3rd party libs) can find the `request_id` using standard gRPC methods.
+4.  **Value vs. Header**: Use `Metadata` for things that need to cross the network (ID, Version). Use `context.WithValue` only for things that are local to the current process/memory.
+5.  **Defensive Streaming**: Because streams are long-lived, always check `stream.Context().Err()` inside your loops to avoid "Zombie Streams" that waste resources after a client disconnects.

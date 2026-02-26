@@ -16,13 +16,17 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-const (
-	ServerAddr    = "localhost:50051"
-	ServerTimeout = 5 * time.Second
-	ServerVersion = "1.0.0"
-)
-
 type contextKey string
+
+const (
+	ServerAddr                   = "localhost:50051"
+	ServerTimeout                = 5 * time.Second
+	ServerVersion                = "1.0.0"
+	RequestAPI                   = "super-secret-key"
+	RequestAPIKey     contextKey = "x-api-key"
+	RequestVersionKey contextKey = "x-client-version"
+	RequestIDKey      contextKey = "x-request-id"
+)
 
 type server struct {
 	pb.UnimplementedGreeterServer
@@ -43,16 +47,16 @@ func VersionInterceptor(
 		return nil, status.Error(codes.Unauthenticated, "metadata is missing")
 	}
 
-	versions := md.Get("x-client-version")
-	if len(versions) == 0 {
-		return nil, status.Error(codes.InvalidArgument, "client version is missing")
+	if err := validateAPIKey(md); err != nil {
+		return nil, err
 	}
 
-	if versions[0] != ServerVersion {
-		return nil, status.Errorf(codes.InvalidArgument, "invalid client version: %s", versions[0])
+	if err := validateVersion(md); err != nil {
+		return nil, err
 	}
 
-	log.Printf("Unary Interceptor [%s]: Client Version %s", info.FullMethod, versions[0])
+	ctx = AddIDToCtx(ctx)
+
 	return handler(ctx, req)
 }
 
@@ -72,16 +76,14 @@ func VersionStreamInterceptor(
 		return status.Error(codes.Unauthenticated, "metadata is missing")
 	}
 
-	versions := md.Get("x-client-version")
-	if len(versions) == 0 {
-		return status.Error(codes.InvalidArgument, "client version is missing")
+	if err := validateAPIKey(md); err != nil {
+		return err
 	}
 
-	if versions[0] != ServerVersion {
-		return status.Errorf(codes.InvalidArgument, "invalid client version: %s", versions[0])
+	if err := validateVersion(md); err != nil {
+		return err
 	}
 
-	log.Printf("Stream Interceptor [%s]: Client Version %s", info.FullMethod, versions[0])
 	return handler(srv, stream)
 }
 
@@ -89,6 +91,8 @@ func (s *server) SayHello(ctx context.Context, in *pb.HelloRequest) (*pb.HelloRe
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
+
+	logRequestID(ctx)
 
 	timer := time.NewTimer(time.Second)
 	defer timer.Stop()
@@ -106,6 +110,7 @@ func (s *server) SayHello(ctx context.Context, in *pb.HelloRequest) (*pb.HelloRe
 
 func (s *server) StreamHello(in *pb.HelloRequest, stream pb.Greeter_StreamHelloServer) error {
 	log.Printf("Streaming to: %v", in.GetName())
+	logRequestID(stream.Context())
 	for i := 0; i < 5; i++ {
 		msg := fmt.Sprintf("Hello %s (message %d)", in.GetName(), i+1)
 		if stream.Context().Err() != nil {
