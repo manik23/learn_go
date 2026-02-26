@@ -22,6 +22,8 @@ const (
 	ServerVersion = "1.0.0"
 )
 
+type contextKey string
+
 type server struct {
 	pb.UnimplementedGreeterServer
 }
