@@ -34,6 +34,15 @@ type server struct {
 	pb.UnimplementedGreeterServer
 }
 
+type wrappedStream struct {
+	grpc.ServerStream
+	ctx context.Context
+}
+
+func (w *wrappedStream) Context() context.Context {
+	return w.ctx
+}
+
 func VersionInterceptor(
 	ctx context.Context,
 	req any,
@@ -96,6 +105,13 @@ func VersionStreamInterceptor(
 
 	if err := validateVersion(md); err != nil {
 		return err
+	}
+
+	ctx = AddIDToCtx(ctx)
+
+	stream = &wrappedStream{
+		ServerStream: stream,
+		ctx:          ctx,
 	}
 
 	return handler(srv, stream)
@@ -199,8 +215,8 @@ func main() {
 		log.Fatalf("failed to listen: %v", err)
 	}
 	s := grpc.NewServer(
-		grpc.UnaryInterceptor(VersionInterceptor),
-		grpc.StreamInterceptor(VersionStreamInterceptor),
+		grpc.ChainUnaryInterceptor(VersionInterceptor),
+		grpc.ChainStreamInterceptor(VersionStreamInterceptor),
 	)
 	pb.RegisterGreeterServer(s, &server{})
 	log.Printf("server listening at %v", lis.Addr())

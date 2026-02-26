@@ -168,8 +168,29 @@ func AddIDToCtx(ctx context.Context) context.Context {
 
 ### 3. The "Immutability" of Streams
 In a `StreamServerInterceptor`, you cannot simply update a `ctx` variable and expect the handler to see it. The `grpc.ServerStream` object carries its own context that is established before the interceptor is called.
-- **Why?**: A stream is a long-lived connection. The context represents the lifecycle of that connection.
-- **The Fix**: To propagate new context data into a stream handler, you must use a **Context/Stream Wrapper**. This involves creating a struct that embeds `grpc.ServerStream` and overrides the `Context()` method.
+- **The Problem**: A stream is a long-lived connection. The `grpc.ServerStream` object is initialized with a context that is effectively "locked." Even if you update a local `ctx` variable in your interceptor, the `handler` won't see it because it pulls the context directly from the `stream` object.
+- **The Fix (Stream Wrapper)**: You must create a struct that wraps the original stream and overrides the `Context()` method. This allows you to "hijack" the stream and provide a context enriched with your Request IDs or other metadata.
+
+```go
+type wrappedStream struct {
+    grpc.ServerStream
+    ctx context.Context
+}
+
+func (w *wrappedStream) Context() context.Context {
+    return w.ctx
+}
+
+// In Interceptor:
+newCtx := AddIDToCtx(originalCtx)
+wrapped := &wrappedStream{ServerStream: originalStream, ctx: newCtx}
+return handler(srv, wrapped)
+```
+
+### 4. The "Safety Net": Recovery Interceptor
+In a production Go service, a single `panic` in a handler should never bring down the entire server. 
+- **Pattern**: Always wrap your interceptor logic (especially those that start chains) in a `defer recover()` block.
+- **Enhanced Safety**: Use `grpc.ChainUnaryInterceptor` and `grpc.ChainStreamInterceptor` to ensure a dedicated Recovery interceptor is the **first** line of defense.
 
 ---
 
@@ -177,6 +198,7 @@ In a `StreamServerInterceptor`, you cannot simply update a `ctx` variable and ex
 
 1.  **Semantics Over Payload**: Always use gRPC Metadata for infrastructure concerns (Auth, Tracing, Versioning). Keep the `.proto` messages strictly for business data.
 2.  **Order Matters in Chaining**: In `grpc.ChainUnaryInterceptor`, the order of execution is Top-to-Bottom. Always place **Recovery** first (to catch panics), then **Auth/Validation**, then **Logging/Observability**.
-3.  **The "Transparent" Trace**: Modifying the **Incoming Context** metadata inside an interceptor is a powerful way to ensure the entire execution tree (even 3rd party libs) can find the `request_id` using standard gRPC methods.
+3.  **The Stream Wrapper Necessity**: If you want to propagate metadata into a `StreamServer` method, a simple `context.WithValue` is not enough. You **must** wrap the stream interface to override the behavior of `stream.Context()`.
+4.  **The "Transparent" Trace**: Modifying the **Incoming Context** metadata inside an interceptor is a powerful way to ensure the entire execution tree (even 3rd party libs) can find the `request_id` using standard gRPC methods.
 4.  **Value vs. Header**: Use `Metadata` for things that need to cross the network (ID, Version). Use `context.WithValue` only for things that are local to the current process/memory.
 5.  **Defensive Streaming**: Because streams are long-lived, always check `stream.Context().Err()` inside your loops to avoid "Zombie Streams" that waste resources after a client disconnects.
