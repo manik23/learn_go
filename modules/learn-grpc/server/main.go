@@ -18,7 +18,7 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/recovery"
+	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/recovery"
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
@@ -236,7 +236,7 @@ func main() {
 	s := grpc.NewServer(
 		grpc.ChainUnaryInterceptor(
 			// Recovery interceptor
-			grpc_recovery.UnaryServerInterceptor(),
+			recovery.UnaryServerInterceptor(),
 			// Prometheus interceptor
 			grpc_prometheus.UnaryServerInterceptor,
 			// Version interceptor
@@ -244,7 +244,7 @@ func main() {
 		),
 		grpc.ChainStreamInterceptor(
 			// Recovery interceptor
-			grpc_recovery.StreamServerInterceptor(),
+			recovery.StreamServerInterceptor(),
 			// Prometheus interceptor
 			grpc_prometheus.StreamServerInterceptor,
 			// Version interceptor
