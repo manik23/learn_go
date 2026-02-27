@@ -8,4 +8,5 @@ use (
 	./modules/learn-runtime
 	./modules/learn-grpc
 	./modules/prod-service-patterns
+	./modules/learn-networking
 )
