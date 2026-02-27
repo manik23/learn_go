@@ -43,13 +43,18 @@ Go's `net` package makes networking look blocking (synchronous), but under the h
 
 ### 4. The `TIME_WAIT` (Zombie) State
 When a TCP connection is closed, the side that initiated the `active close` stays in this state for **2MSL** (Maximum Segment Lifetime), usually 60-120 seconds.
+
 - **Why it exists**:
-    1.  **Reliability**: Ensures the final `ACK` is received by the peer. If lost, the peer retransmits `FIN`, and the "zombie" socket is still there to acknowledge it.
-    2.  **Safety**: Prevents "delayed duplicates" (old packets) from a previous connection from interfering with a new connection using the same Quadruple (Source IP, Source Port, Dest IP, Dest Port).
-- **The "Port Bomb" Lesson**: 
-    If you open thousands of short-lived connections to the same destination, you will fill the kernel's connection table. 
-    - **Symptom**: `dial tcp: assign requested address`.
-    - **Fix**: Use **Connection Pooling** (Keep-Alives) to reuse existing `ESTABLISHED` sockets.
+This state occurs on the side that initiates the connection teardown (the **Active Closer**). It stays in `TIME_WAIT` for **2MSL** (Maximum Segment Lifetime, usually 60-120s) to ensure:
+
+1.  **Reliability**: The final `ACK` is received by the peer. If lost, the peer retransmits `FIN`, and the "zombie" socket is still there to acknowledge it.
+2.  **Safety**: Prevents "delayed duplicates" (old packets) from a previous connection from interfering with a new connection using the same Quadruple (Source IP, Source Port, Dest IP, Dest Port).
+
+**The "Bomb" Lesson**: By intentionally creating thousands of connections and closing them immediately, we flood the kernel's connection table with sockets stuck in `TIME_WAIT`, which can prevent new connections from being established (Ephemeral Port Exhaustion).
+
+If you open thousands of short-lived connections to the same destination, you will fill the kernel's connection table. 
+- **Symptom**: `dial tcp: assign requested address`.
+- **Fix**: Use **Connection Pooling** (Keep-Alives) to reuse existing `ESTABLISHED` sockets.
 
 ### 5. TCP 3-Way Handshake
 1.  **SYN**: Client sends connection request.
@@ -65,15 +70,15 @@ When a process opens a connection but fails to call `Close()`, that socket remai
     - `FD Leak`: Managed by the **Process**. Occurs *instead of* close.
 
 ### 7. The Half-Closed Trap: `CLOSE_WAIT` vs `FIN_WAIT_2`
-When a connection is "leaked" (one side fails to call `Close()`), the TCP state machine gets stuck:
+When a side fails to call `Close()` (a leak), the TCP state machine hangs in a semi-closed state:
 
-| State | Responsibility | Meaning |
+| State | Responsibility | Description |
 | :--- | :--- | :--- |
-| **`FIN_WAIT_2`** | Active Closer | Sent `FIN`, received `ACK`. Waiting for the other side to send its `FIN`. |
-| **`CLOSE_WAIT`** | **Passive Closer** | Received `FIN`, sent `ACK`. **Waiting for the local application to call `Close()`**. |
+| **`CLOSE_WAIT`** | **Passive Closer** (The Leak) | The Remote side has closed, the local Kernel has acknowledged (`ACK`), and is now **waiting for the Local Application to call `Close()`**. The File Descriptor remains open. |
+| **`FIN_WAIT_2`** | Active Closer (The Hang) | Sent `FIN`, received `ACK`. Now **waiting for the other side to send its `FIN`**. It will stay here until a timeout (usually 60s) because the peer is stuck in `CLOSE_WAIT`. |
 
-- **Why this is dangerous**: If your app is stuck in `CLOSE_WAIT`, it means you are leaking File Descriptors. The kernel will keep that socket open forever (or for a very long timeout), eventually leading to `Too many open files`.
-- **The Culprit**: Usually a missing `defer conn.Close()` or an error path that returns early without cleaning up.
+- **Senior Gopher Tip**: If you see `CLOSE_WAIT` in production, it's an application bug (missing `Close()`). If you see `FIN_WAIT_2`, you are waiting on a peer that is likely leaking connections. In our example client side is active closer and server side is passive closer. In our case server is leaking connections so it will be in CLOSE_WAIT state and client will be in FIN_WAIT_2 state.
+
 
 ---
 

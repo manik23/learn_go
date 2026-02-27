@@ -36,6 +36,16 @@ func main() {
 
 func handleConnection(conn net.Conn) {
 	// Intentional Leak for Experimentation
+
+	/*
+
+		CLOSE_WAIT (The Leak)
+		When you see CLOSE_WAIT, it means the Remote side (client connection) has closed, the local Kernel (server kernel) has acknowledged it with an ACK, and now the Local Kernel is waiting for the Local Application to call Close().
+
+		Because our server (in LEAK=true mode) returns from the function without calling conn.Close(), the File Descriptor stays open in the process table.
+		The Kernel cannot send the final FIN to finish the handshake because the application hasn't "given up" the socket yet.
+
+	*/
 	if os.Getenv("LEAK") == "true" {
 		log.Printf("[LEAK] New connection from %s - NOT closing FD!", conn.RemoteAddr().String())
 		return // Function returns, but connection is NEVER closed
