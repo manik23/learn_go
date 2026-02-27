@@ -9,7 +9,7 @@ This module explores the low-level networking stack, focusing on how Go interact
 - [x] **Phase 4.2: TCP State Mastery** (`TIME_WAIT`, `CLOSE_WAIT`, `FIN_WAIT_2`)
 - [x] **Phase 4.3: Syscall Barrier** (`dtruss`, `strace`, `EAGAIN` internals)
 - [x] **Phase 4.4: TCP Internals** (Window Scaling, MSS, Congestion)
-- [ ] **Phase 4.5: The Netpoll Runtime** (Deep dive into Go source: `runtime/netpoll.go`)
+- [x] **Phase 4.5: The Netpoll Runtime** (Deep dive into Go source: `runtime/netpoll.go`)
 
 ---
 
