@@ -309,3 +309,30 @@ From our `tcpdump` experiment, we observed the following flag sequences:
 ```
 
 ---
+
+### 🧠 Phase 4.5: The Netpoll Runtime (The Glue)
+
+This is the internal mechanism that makes Go's networking performant. It prevents networking from being "one thread per connection."
+
+#### **1. The Workflow: From `Read()` to `epoll`**
+1.  **Application**: `conn.Read(buf)` 
+2.  **Internal**: `poll.FD.Read` calls `syscall.Read`.
+3.  **Kernel**: Returns `EAGAIN` (meaning "No data now, try later").
+4.  **Runtime**: `poll.FD.WaitRead` is called.
+5.  **Park**: `runtime.gopark` puts the goroutine into a `_Gwaiting` state. It stops consuming CPU.
+6.  **Poll**: A background `netpoll` thread (or any thread looking for work) calls `epoll_wait` (Linux) or `kevent` (macOS).
+7.  **Wake**: When data hits the NIC, the kernel notification system wakes the poller.
+8.  **Ready**: `runtime.netpoll` finds the waiting goroutine and calls `runtime.goready(g)`.
+9.  **Resume**: The goroutine is put back on the runqueue (`_Grunnable`) and eventually finishes its `Read()` call.
+
+#### **2. Where to look in Go Source**
+If you want to read the "Sacred Texts", look for these files in your Go installation:
+- `src/runtime/netpoll.go`: The platform-independent logic.
+- `src/runtime/netpoll_kqueue.go`: The macOS/BSD implementation.
+- `src/runtime/netpoll_epoll.go`: The Linux implementation.
+- `src/internal/poll/fd_unix.go`: The bridge between the `net` package and the `runtime`.
+
+> [!IMPORTANT]
+> **The Win**: This is why Go can handle **C10k (Target: 10,000 connections)** with only a few MBs of RAM and a handful of OS Threads. The OS only sees a single thread waiting on thousands of sockets using one `epoll_wait` call.
+
+---

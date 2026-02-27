@@ -11,7 +11,7 @@ This path focuses on high-performance, resilient, and production-grade Go engine
 | 1 | **Production Go Service Patterns** | ✅ Completed | Context propagation, Graceful Shutdown, Connection Pooling, Backpressure. |
 | 2 | **Performance Engineering** | ✅ Completed | `pprof` (CPU/Heap), Flame Graphs, Allocation Optimization, `Benchmark` logic vs network overhead. |
 | 3 | **gRPC Deeply** | ✅ Completed | Unary/Streaming/Bidi, Interceptors, Protobuf Design, Prometheus Metrics. |
-| 4 | **Linux/Networking Systems** | 🏗️ In Progress | TCP States, FD Leaks, `netpoll`, and Syscall Tracing (`strace`). |
+| 4 | **Linux/Networking Systems** | ✅ Completed | TCP States, FD Leaks, `netpoll`, Syscall Tracing (`strace`), Packet Flags. |
 | 5 | **Envoy + xDS Control Plane** | 📅 To Do | LDS/RDS/CDS/EDS, Config versioning, Rollout safety. |
 | 6 | **Cloud Control-Plane Architecture** | 📅 To Do | Idempotency, Reconciliation loops, Leader election, Sharding. |
 | 7 | **DPDK Integration Model** | 📅 To Do | CGO boundaries, Zero-copy interfaces, Memory ownership. |
@@ -33,7 +33,14 @@ This path focuses on high-performance, resilient, and production-grade Go engine
 
 ---
 
+## 🏗️ The Senior Learning Workflow
+For every module in this curriculum, we adhere to a strict **Systemic Engineering Loop**:
+1.  **Observability First**: Every module must have a `Makefile` with targets for running, watching, and tracing.
+2.  **Revision Logs**: All conceptual learnings and "Senior Side-bars" are documented in the local `README.md`.
+3.  **Kernel-Space Equality**: If a tool is restricted by macOS (SIP), we pivot immediately to a **Linux-based Docker Container** to see the canonical behavior.
+4.  **Hands-on Chaos**: We don't just write code; we break it (FD leaks, Port bombs) to understand failure modes.
+
 ## 🚀 How to Resume
-1. Navigate to `modules/learn-networking`.
-2. Resume Phase 4.4: TCP Internals (Window Size & Flow Control).
-3. Type `make docker-trace-server` to restart the tracing environment.
+1.  **Objective**: Start **Module 5: Envoy + xDS Control Plane**.
+2.  **Initial Task**: Initialize the `learn-xds` module and define the Control Plane architecture.
+3.  **Environment**: Ensure Docker is running for Envoy sidecar experiments.
