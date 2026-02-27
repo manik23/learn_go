@@ -335,4 +335,23 @@ If you want to read the "Sacred Texts", look for these files in your Go installa
 > [!IMPORTANT]
 > **The Win**: This is why Go can handle **C10k (Target: 10,000 connections)** with only a few MBs of RAM and a handful of OS Threads. The OS only sees a single thread waiting on thousands of sockets using one `epoll_wait` call.
 
----
+## 📊 Networking Cheat Sheet (The Senior Toolbox)
+
+Quick-reference commands for debugging and monitoring the network stack.
+
+| Goal | Tool | Command | Analysis |
+| :--- | :--- | :--- | :--- |
+| **Active Sockets** | `lsof` | `lsof -nP -i :8080` | Shows which process ID (PID) owns a specific port. |
+| **All Connections** | `netstat` | `netstat -an \| grep 8080` | Shows connection states (ESTABLISHED, TIME_WAIT, etc). |
+| **Linux Advanced** | `ss` | `ss -antp \| grep 8080` | Modern, faster alternative to netstat (Linux only). |
+| **Raw Packets** | `tcpdump` | `sudo tcpdump -i lo0 -X 'tcp port 8080'` | Inspects raw bytes and flags (SYN, ACK, FIN) on the wire. |
+| **Syscall Trace** | `strace` | `strace -e trace=network -f ./server` | Shows the exact kernel calls (accept4, socket, bind) in real-time. |
+| **Limits** | `ulimit` | `ulimit -n` | Checks the process-level File Descriptor limit. |
+
+### TCP Flag Quick Reference
+- **`[S]`**: SYN (Synchronize) - Start connection.
+- **`[S.]`**: SYN-ACK - Acknowledge connection.
+- **`[.]`**: ACK - Acknowledge payload.
+- **`[P.]`**: PUSH - Send data to the app NOW.
+- **`[F.]`**: FIN - Close connection.
+- **`[R]`**: RST - Reset connection (Abrupt close/Reject).

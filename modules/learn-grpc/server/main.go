@@ -7,6 +7,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os"
 	"strconv"
 	"time"
 
@@ -128,12 +129,24 @@ func (s *server) SayHello(ctx context.Context, in *pb.HelloRequest) (*pb.HelloRe
 		return nil, ctx.Err()
 	}
 
+	// CHAOS: Panic simulation
+	if os.Getenv("GRPC_PANIC") == "true" {
+		log.Println("[CHAOS] Panic enabled - crashing handler!")
+		panic("intentional gRPC handler panic")
+	}
+
 	logRequestID(ctx)
 
 	// Increment custom metric
 	incrementTotalGreetings(ctx)
 
-	timer := time.NewTimer(time.Second)
+	delay := time.Second
+	if os.Getenv("GRPC_LATE") == "true" {
+		log.Println("[CHAOS] Late response enabled - adding 10s delay")
+		delay = 10 * time.Second
+	}
+
+	timer := time.NewTimer(delay)
 	defer timer.Stop()
 
 	select {

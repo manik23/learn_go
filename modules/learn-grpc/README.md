@@ -2,7 +2,45 @@
 
 This module covers the implementation of gRPC services in Go, focusing on Unary and Server-Side Streaming patterns, as well as production-grade error handling and deadlines.
 
-## 🛠️ Scaffolding & Setup
+---
+
+### 🛰️ Progress Tracking
+- [x] **Protobuf Modeling**: Designing message types, oneofs, and enums.
+- [x] **Unary gRPC**: Standard Request-Response implementation.
+- [x] **Server Streaming**: Handling long-lived responses from server to client.
+- [x] **Interceptors**: Implementing authentication, versioning, and recovery.
+- [x] **Observability**: Exporting Prometheus metrics from gRPC handlers.
+- [ ] **Chaos Testing**: Simulating panics and network latency.
+
+---
+
+### 🛠️ Chaos Experiments (Hands-on)
+
+Observe how gRPC handles failures using environment-driven chaos.
+
+#### **1. Forced Recovery (Panic test)**
+The server uses a `recovery` interceptor. This test proves it can survive an app-level crash.
+```bash
+# Start server with panic mode enabled
+GRPC_PANIC=true make run-server
+
+# In another terminal, run the client
+make run-client
+# Result: Client gets "Internal Server Error", but server doesn't crash!
+```
+
+#### **2. Deadline/Timeout test**
+Simulate a slow backend (10s delay).
+```bash
+# Start server with 'late' response mode
+GRPC_LATE=true make run-server
+
+# Run client (Client has a default timeout of 5s)
+make run-client
+# Result: Client returns "DeadlineExceeded" after 5s.
+```
+
+---
 
 To recreate this module from scratch, follow these steps:
 
@@ -311,4 +349,28 @@ docker run -d \
 3.  **The Stream Wrapper Necessity**: If you want to propagate metadata into a `StreamServer` method, a simple `context.WithValue` is not enough. You **must** wrap the stream interface to override the behavior of `stream.Context()`.
 4.  **The "Transparent" Trace**: Modifying the **Incoming Context** metadata inside an interceptor is a powerful way to ensure the entire execution tree (even 3rd party libs) can find the `request_id` using standard gRPC methods.
 4.  **Value vs. Header**: Use `Metadata` for things that need to cross the network (ID, Version). Use `context.WithValue` only for things that are local to the current process/memory.
-5.  **Defensive Streaming**: Because streams are long-lived, always check `stream.Context().Err()` inside your loops to avoid "Zombie Streams" that waste resources after a client disconnects.
+5.  **Defensive Streaming**: Because streams are long-lived, always check `stream.Context().Err()` inside your loops to avoid "Zombie Streams" that waste resources after a client disconnect
+
+## 📊 gRPC Cheat Sheet (The Distributed MRI)
+
+Quick-reference commands for maintaining and debugging gRPC services.
+
+| Goal | Tool | Command | Analysis |
+| :--- | :--- | :--- | :--- |
+| **Code Gen** | `protoc` | `make generate` | Generates Go code from `.proto` files. |
+| **Raw Metrics** | `curl` | `curl -s localhost:2112/metrics` | Scrapes Prometheus metrics directly from the server. |
+| **Metrics Filter** | `grep` | `make metrics-grpc` | Greps for standard gRPC metrics (Started, Handled). |
+| **CPU Profile** | `pprof` | `go tool pprof http://localhost:9000/debug/pprof/profile` | Analyzes performance (if pprof server is enabled). |
+| **Client Test** | `go run` | `make run-client` | Triggers a local client to verify Unary and Streaming calls. |
+
+### PromQL Quick Look
+- **Throughput**: `sum(rate(grpc_server_started_total[1m]))`
+- **Error Rate**: `rate(grpc_server_handled_total{grpc_code!="OK"}[1m])`
+- **p99 Latency**: `histogram_quantile(0.99, sum by (le) (rate(grpc_server_handling_seconds_bucket[5m])))`
+
+### gRPC Status Codes Reference
+- **`OK (0)`**: Success.
+- **`Unauthenticated (16)`**: Missing or invalid version/API key.
+- **`DeadlineExceeded (4)`**: Request took longer than the defined timeout.
+- **`Canceled (1)`**: The client or an interceptor cancelled the request.
+- **`Internal (13)`**: Server crashed (panic) or unhandled logic error.

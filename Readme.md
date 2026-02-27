@@ -39,6 +39,7 @@ For every module in this curriculum, we adhere to a strict **Systemic Engineerin
 2.  **Revision Logs**: All conceptual learnings and "Senior Side-bars" are documented in the local `README.md`.
 3.  **Kernel-Space Equality**: If a tool is restricted by macOS (SIP), we pivot immediately to a **Linux-based Docker Container** to see the canonical behavior.
 4.  **Hands-on Chaos**: We don't just write code; we break it (FD leaks, Port bombs) to understand failure modes.
+5.  **Cheat Sheets**: Every module ends with a "Revision Cheat Sheet" containing the most critical commands and codes for quick reference.
 
 ## 🚀 How to Resume
 1.  **Objective**: Start **Module 5: Envoy + xDS Control Plane**.

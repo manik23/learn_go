@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"net/http"
 	"net/http/pprof"
+	"os"
 	"os/signal"
 	"sync/atomic"
 	"syscall"
@@ -50,10 +51,10 @@ func setupPProf(ctx context.Context) {
 	mux.HandleFunc("/debug/pprof/symbol", pprof.Index)
 	mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
 
-	server := &http.Server{Addr: "127.0.0.1:9000", Handler: mux}
+	server := &http.Server{Addr: ":9000", Handler: mux}
 	go func() {
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Could not listen on %s: %v\n", "127.0.0.1:9000", err)
+			log.Fatalf("Could not listen on %s: %v\n", ":9000", err)
 		}
 	}()
 
@@ -91,13 +92,13 @@ func main() {
 
 	handler := newHttpHandler(appConfig)
 	newHttpServer := &http.Server{
-		Addr:    "localhost:8080",
+		Addr:    ":8080",
 		Handler: handler,
 	}
 
 	go func() {
 		if err := newHttpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Could not listen on %s: %v\n", "localhost:8080", err)
+			log.Fatalf("Could not listen on %s: %v\n", ":8080", err)
 		}
 	}()
 
@@ -156,7 +157,13 @@ func (appConfig *AppConfig) handleProcess(w http.ResponseWriter, r *http.Request
 }
 
 func (appConfig *AppConfig) stepAuth(ctx context.Context) error {
-	t := time.NewTimer(time.Duration(rand.Intn(500)) * time.Millisecond)
+	delay := rand.Intn(500)
+	if os.Getenv("SLOW_AUTH") == "true" {
+		log.Println("[CHAOS] Slow Auth enabled - adding 3s delay")
+		delay = 3000 // Force it to exceed the 2s context timeout
+	}
+
+	t := time.NewTimer(time.Duration(delay) * time.Millisecond)
 	defer t.Stop()
 	select {
 	case <-ctx.Done():
@@ -179,6 +186,10 @@ func (appConfig *AppConfig) stepValidate(ctx context.Context) error {
 
 func (appConfig *AppConfig) stepStore(ctx context.Context) error {
 	// MUST respect ctx.Done()
+	if os.Getenv("DB_FAILURE") == "true" {
+		log.Println("[CHAOS] DB Failure enabled - returning error")
+		return fmt.Errorf("database connection refused")
+	}
 
 	select {
 	case <-ctx.Done():

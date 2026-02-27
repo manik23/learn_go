@@ -1,8 +1,11 @@
-.PHONY: generate run-server run-client clean
+# OS Detection
+OS := $(shell uname)
 
 # Variables
 PROTO_SRC=proto/service.proto
 GEN_OUT=.
+
+.PHONY: generate format explain run-server run-client metrics-grpc metrics-raw docker-build docker-run clean
 
 generate:
 	@echo "Generating gRPC code..."
@@ -21,20 +24,29 @@ explain:
 	@cat README.md | sed -n '/## 🔍 Revision Notes/,$p'
 
 run-server:
-	@echo "Starting gRPC server..."
+	@echo "Starting gRPC server on $(OS)..."
 	go run ./server/...
 
 run-client:
-	@echo "Starting gRPC client..."
+	@echo "Starting gRPC client on $(OS)..."
 	go run ./client/...
 
 metrics-grpc:
-	@echo "Fetching metrics from prometheus server..."
+	@echo "Fetching gRPC metrics..."
 	curl -s localhost:2112/metrics | grep ^grpc
 
 metrics-raw:
-	@echo "Fetching raw metrics from prometheus server..."
+	@echo "Fetching all metrics..."
 	curl -s localhost:2112/metrics
+
+# Docker (Linux-based) Parity
+docker-build:
+	@echo "Building gRPC Linux container..."
+	docker build -t learn-grpc-linux .
+
+docker-run: docker-build
+	@echo "Running gRPC server in Linux container..."
+	docker run -it --rm -p 50051:50051 -p 2112:2112 learn-grpc-linux
 
 clean:
 	@echo "Cleaning up generated files..."
