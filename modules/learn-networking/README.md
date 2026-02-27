@@ -4,6 +4,17 @@ This module explores the low-level networking stack, focusing on how Go interact
 
 ---
 
+### 🛰️ Progress Tracking
+- [x] **Phase 4.1: Socket Observability** (`lsof`, `netstat`)
+- [x] **Phase 4.2: TCP State Mastery** (`TIME_WAIT`, `CLOSE_WAIT`, `FIN_WAIT_2`)
+- [x] **Phase 4.3: Syscall Barrier** (`dtruss`, `strace`, `EAGAIN` internals)
+- [ ] **Phase 4.4: TCP Internals** (Window Scaling, MSS, Congestion)
+- [ ] **Phase 4.5: The Netpoll Runtime** (Deep dive into Go source: `runtime/netpoll.go`)
+
+---
+
+---
+
 ## 🛠️ Experiments & Setup
 
 Run these experiments to see the networking stack in action.
@@ -126,3 +137,90 @@ When a side fails to call `Close()` (a leak), the TCP state machine hangs in a s
 - `netstat -an | grep 8080`: Observe connection states.
 - `tcpdump -i lo0 port 8080`: Watch raw packets (SYN, ACK, FIN) flowing locally.
 - `ulimit -n`: Check process file descriptor limits.
+
+---
+
+### 🛰️ Phase 4.3: The Syscall Barrier
+
+Networking in Go is an abstraction over OS System Calls. Every time you interact with the network, the Go runtime executes a `syscall`.
+
+#### **The "Master" Syscalls**
+1.  **`socket()`**: Requests a new file descriptor from the kernel.
+2.  **`bind()`**: Anchors the socket to a specific port.
+3.  **`listen()`**: Tells the kernel to start queuing incoming connections.
+4.  **`accept()`**: Grabs a connection from the queue (returns a new FD).
+5.  **`read()` / `write()`**: Moves bytes between User-Space (Go) and Kernel-Space buffers.
+
+#### **Tracing on macOS (`dtruss`)**
+Because macOS uses SIP, you often have to trace the binary directly rather than the `go run` wrapper.
+```bash
+# Build the binary first
+go build -o server cmd/server/main.go
+
+# Trace only the networking syscalls
+sudo dtruss ./server 2>&1 | grep -E "socket|bind|listen|accept|read|write"
+```
+
+> [!NOTE]
+> **Tracing on macOS vs. Linux**:
+> - **Linux**: Uses `ptrace` and the `strace` utility.
+> - **macOS (Darwin)**: Uses `dtrace` and the `dtruss` utility (due to the Xnu kernel architecture).
+> - **Why?**: `strace` is built specifically for the Linux kernel's syscall interface. Apple uses the more advanced DTrace engine for system instrumentation.
+
+---
+
+### 🐧 Phase 4.4: Linux Tracing with Docker (`strace`)
+
+Since macOS SIP restricts `dtrace`/`dtruss`, we can pivot to a Linux environment using Docker to see the canonical `strace` output used in production Linux servers.
+
+#### **1. Build and Trace with One Command**
+The Makefile now handles cross-compilation (`GOOS=linux GOARCH=arm64`), image building, and running with the correct capabilities.
+```bash
+make docker-trace-server
+```
+
+#### **2. Manual Control**
+If you want to explore the Linux environment manually:
+```bash
+# Build binary and image
+make docker-build
+
+# Jump into the shell
+make docker-shell
+```
+
+#### **4. Detailed `strace` Analysis (The Matrix)**
+Based on our live experiment, here is what the kernel was doing:
+
+| Syscall | Observation | Level-Up Insight |
+| :--- | :--- | :--- |
+| `socket(...) = 4` | Creates a new File Descriptor (4). | The "starting point" for any network communication. |
+| `setsockopt(..., SO_REUSEADDR, [1])` | Success! | Allows the server to restart immediately without waiting for `TIME_WAIT` to clear. |
+| `accept4(4, ...) = -1 EAGAIN` | **The Masterstroke** | Proves Go uses **Non-blocking I/O**. Instead of hanging, the CPU is freed to run other goroutines. |
+| `accept4(4, ...) = 5` | New Connection! | FD 4 remains the "Doorbell", FD 5 becomes the "Private Chat" for this specific client. |
+| `read(5, "hello\n", 4096) = 6` | Data In. | You can see the raw bytes moving from the kernel buffer to your Go `[]byte`. |
+| `read(5, "", 4096) = 0` | Connection Closed. | In Unix, a read of 0 bytes is the standard "EOF" (End of File/Stream). |
+
+**Sample Log from Experiment:**
+```text
+# Server Setup
+[pid    12] socket(AF_INET, SOCK_STREAM|SOCK_CLOEXEC|SOCK_NONBLOCK, IPPROTO_TCP) = 4
+[pid    12] setsockopt(4, SOL_SOCKET, SO_REUSEADDR, [1], 4) = 0
+[pid    12] bind(4, {sa_family=AF_INET6, sin6_port=htons(8080)...}, 28) = 0
+[pid    12] listen(4, 4096)             = 0
+
+# The Accept Loop (Non-blocking)
+[pid    12] accept4(4, ..., SOCK_CLOEXEC|SOCK_NONBLOCK) = -1 EAGAIN (Resource temporarily unavailable)
+
+# Client Connects
+[pid    12] accept4(4, {sa_family=AF_INET6, sin6_port=htons(34784)...}, ...) = 5
+
+# Data Exchange
+[pid    12] read(5, "hello\n", 4096)    = 6
+[pid    12] write(5, "ECHO: hello\n", 12) = 12
+
+# Client Disconnects
+[pid    12] read(5, "", 4096)           = 0
+```
+
+---

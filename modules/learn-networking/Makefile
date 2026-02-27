@@ -27,3 +27,26 @@ death-count:
 dump-packets:
 	@echo "Capturing local packets on port 8080 (Requires sudo)..."
 	sudo tcpdump -i lo0 -X -vv port 8080
+
+trace-server:
+	@echo "Tracing Syscalls for TCP Server (Requires sudo)..."
+	sudo dtruss go run cmd/server/main.go 2>&1 | grep -E "socket|bind|listen|accept|read|write"
+
+# Docker (Linux-based) Tracing
+# Cross-compile for Linux ARM64 (Assuming user is on Apple Silicon or wants ARM64 Linux)
+build-linux:
+	@echo "Building Linux ARM64 binary..."
+	GOOS=linux GOARCH=arm64 go build -o server-linux cmd/server/main.go
+
+docker-build: build-linux
+	@echo "Building Linux-based tracing image..."
+	docker build -t learn-networking-linux .
+
+docker-shell:
+	@echo "Starting Linux shell (with ptrace capability)..."
+	docker run -it --rm --cap-add=SYS_PTRACE --security-opt seccomp=unconfined -v $(PWD):/app learn-networking-linux /bin/bash
+
+# Directly run the container which now has strace as entrypoint
+docker-trace-server: docker-build
+	@echo "Tracing Syscalls inside Linux Container..."
+	docker run -it --rm --cap-add=SYS_PTRACE --security-opt seccomp=unconfined -p 8080:8080 learn-networking-linux
