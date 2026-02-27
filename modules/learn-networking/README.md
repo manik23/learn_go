@@ -8,7 +8,7 @@ This module explores the low-level networking stack, focusing on how Go interact
 - [x] **Phase 4.1: Socket Observability** (`lsof`, `netstat`)
 - [x] **Phase 4.2: TCP State Mastery** (`TIME_WAIT`, `CLOSE_WAIT`, `FIN_WAIT_2`)
 - [x] **Phase 4.3: Syscall Barrier** (`dtruss`, `strace`, `EAGAIN` internals)
-- [ ] **Phase 4.4: TCP Internals** (Window Scaling, MSS, Congestion)
+- [x] **Phase 4.4: TCP Internals** (Window Scaling, MSS, Congestion)
 - [ ] **Phase 4.5: The Netpoll Runtime** (Deep dive into Go source: `runtime/netpoll.go`)
 
 ---
@@ -202,7 +202,7 @@ Based on our live experiment, here is what the kernel was doing:
 | `read(5, "", 4096) = 0` | Connection Closed. | In Unix, a read of 0 bytes is the standard "EOF" (End of File/Stream). |
 
 **Sample Log from Experiment:**
-```text
+```bash
 # Server Setup
 [pid    12] socket(AF_INET, SOCK_STREAM|SOCK_CLOEXEC|SOCK_NONBLOCK, IPPROTO_TCP) = 4
 [pid    12] setsockopt(4, SOL_SOCKET, SO_REUSEADDR, [1], 4) = 0
@@ -238,3 +238,74 @@ Our `Makefile` now automatically detects your OS and uses the appropriate low-le
 > [!TIP]
 > **Why `ss` over `netstat` on Linux?**
 > `ss` (Socket Statistics) is faster and more powerful than the legacy `netstat`. It gets its information directly from the kernel's `tcp_diag` module.
+
+---
+
+### 🛰️ Phase 4.4: TCP Internals (Flow Control & Flow)
+
+In this phase, we look at the internal parameters of the TCP protocol that ensure data is delivered reliably and efficiently.
+
+#### **1. Key Concepts**
+- **MSS (Maximum Segment Size)**: The largest amount of data (in bytes) that a device can receive in a single TCP segment. Usually ~1460 bytes for Ethernet.
+- **Window Size (`win`)**: The amount of data the receiver is willing to accept without sending an `ACK`. This is how TCP implements **Flow Control**.
+- **Retransmission**: If a packet is lost (no `ACK` received), the sender re-sends the data after a timeout.
+
+###### MSS prevents fragmentation, whereas Window Size manages flow control and throughput efficiency.
+
+- **MSS Example (The Slicer)**: 
+    If you send a **5,000 byte** image and the MSS is **1,460 bytes** (Standard Ethernet), the TCP layer will automatically slice it into **4 packets** (~1460, ~1460, ~1460, ~620). This prevents the IP layer from having to "fragment" the packets at the router level, which is much more expensive.
+- **Window Size Example (The Dam)**:
+    If the Server is slow and its internal buffer is filling up, it will send an ACK with `win 1000`. The Client sees this and says, "I can only send 1000 more bytes before I must stop and wait." If the buffer hits 0, it sends **`win 0`** (Zero Window), and the Client completely stops sending data until the Server's app clears the buffer.
+
+#### **2. Observing the Handshake**
+Run the following to see how the Client and Server negotiate their "Contract":
+```bash
+make inspect-tcp
+```
+
+#### **3. What to watch for:**
+- `options [mss 16344]`: The negotiated maximum packet size for the local loopback.
+- `win 65535`: The initial receive window.
+- `options [nop,wscale 6]`: Window scaling factor (allows the window to grow beyond 64KB).
+
+#### **4. Detailed Packet Analysis (The Wire)**
+From our `tcpdump` experiment, we observed the following flag sequences:
+
+| Flag | Name | Meaning |
+| :--- | :--- | :--- |
+| **`[S]`** | **SYN** | "Synchronize" - I want to start a connection. |
+| **`[S.]`** | **SYN-ACK** | "I hear you, and I also want to connect." |
+| **`[.]`** | **ACK** | "Acknowledged" - Handshake complete or data received. |
+| **`[P.]`** | **PUSH-ACK** | "Here is data, give it to the app immediately!" |
+| **`[F.]`** | **FIN-ACK** | "I'm done sending data. Goodbye." |
+
+> [!IMPORTANT]
+> **Observation: The 15-Second Heartbeat**
+> In our trace, we saw empty `[.]` packets flowing every 15 seconds:
+> `17:13:42 -> 17:13:57 -> 17:14:12`
+> This is Go's **TCP Keep-Alive** in action! The kernel sends these "probes" to ensure the other side is still alive, preventing "Ghost Sockets" from hanging around forever if a client disappears without a proper `FIN`.
+
+**Sample Log from Experiment:**
+```bash
+
+# TCP Handshake SYN -> SYN-ACK -> ACK
+17:15:31 IP6 ::1.61863 > ::1.8080: Flags [S], seq 1659994842, win 65535, options [mss 16324,nop,wscale 6,nop,nop,TS val 3234100448 ecr 0,sackOK,eol], length 0
+
+17:15:31 IP6 ::1.8080 > ::1.61863: Flags [S.], seq 2575719388, ack 1659994843, win 65535, options [mss 16324,nop,wscale 6,nop,nop,TS val 1167892641 ecr 3234100448,sackOK,eol], length 0
+
+17:15:31 IP6 ::1.61863 > ::1.8080: Flags [.], ack 2575719389, win 6371, options [nop,nop,TS val 3234100448 ecr 1167892641], length 0
+
+# Data Exchange (Push + Ack)
+17:13:41 IP6 localhost.61694 > localhost.8080: Flags [P.], seq 4229207334:4229207340, ack 629883716, win 6371, length 6
+17:13:41 IP6 localhost.8080 > localhost.61694: Flags [.], ack 4229207340, win 6371, length 0
+
+# Keep-Alive Probes (The 15s Heartbeat)
+17:13:57 IP6 localhost.8080 > localhost.61694: Flags [.], ack 4229207354, win 6371, length 0
+17:13:57 IP6 localhost.61694 > localhost.8080: Flags [.], ack 629883754, win 6370, length 0
+
+# The Final Wave (FIN-ACK)
+17:15:09 IP6 localhost.61694 > localhost.8080: Flags [F.], seq 4229207354, ack 629883754, win 6370, length 0
+17:15:09 IP6 localhost.8080 > localhost.61694: Flags [.], ack 4229207355, win 6371, length 0
+```
+
+---

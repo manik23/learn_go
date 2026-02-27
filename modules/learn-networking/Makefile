@@ -43,6 +43,11 @@ dump-packets:
 	@echo "Capturing local packets on port 8080 (Requires sudo)..."
 	sudo tcpdump -i lo0 -X -vv port 8080
 
+inspect-tcp:
+	@echo "Analyzing TCP Handshake & Flags (Window Size, MSS)..."
+	@echo "Note: Run the client AFTER starting this command."
+	sudo tcpdump -i lo0 -S -n 'tcp port 8080'
+
 trace-server:
 	@echo "Tracing Syscalls for TCP Server (Requires sudo)..."
 	sudo dtruss go run cmd/server/main.go 2>&1 | grep -E "socket|bind|listen|accept|read|write"
