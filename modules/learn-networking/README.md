@@ -224,3 +224,17 @@ Based on our live experiment, here is what the kernel was doing:
 ```
 
 ---
+
+### 🛠️ Observation Tools (Cross-Platform)
+
+Our `Makefile` now automatically detects your OS and uses the appropriate low-level tools for monitoring connections.
+
+| Feature | macOS Command | Linux Command (`ss`) | Makefile Target |
+| :--- | :--- | :--- | :--- |
+| **Active Conns** | `lsof -nP -i :8080` | `ss -ntp \| grep 8080` | `make watch-conns` |
+| **TCP States** | `netstat -an \| grep 8080` | `ss -ant \| grep 8080` | `make watch-tcp` |
+| **TIME_WAIT Count** | `netstat -an \| ... \| wc -l` | `ss -ant \| ... \| wc -l` | `make death-count` |
+
+> [!TIP]
+> **Why `ss` over `netstat` on Linux?**
+> `ss` (Socket Statistics) is faster and more powerful than the legacy `netstat`. It gets its information directly from the kernel's `tcp_diag` module.

@@ -1,4 +1,19 @@
-.PHONY: run-server run-client watch-conns watch-packets
+.PHONY: run-server run-client watch-conns watch-tcp death-count dump-packets trace-server docker-build docker-shell docker-trace-server
+
+# OS Detection
+OS := $(shell uname)
+
+ifeq ($(OS), Darwin)
+    # macOS
+    WATCH_CONNS_CMD = lsof -nP -i :8080
+    WATCH_TCP_CMD = netstat -an | grep 8080
+    DEATH_COUNT_CMD = netstat -an | grep 8080 | grep TIME_WAIT | wc -l
+else
+    # Linux (assuming ss is available)
+    WATCH_CONNS_CMD = ss -ntp | grep 8080
+    WATCH_TCP_CMD = ss -ant | grep 8080
+    DEATH_COUNT_CMD = ss -ant | grep 8080 | grep TIME-WAIT | wc -l
+endif
 
 run-server:
 	@echo "Starting TCP Echo Server..."
@@ -13,16 +28,16 @@ run-bomb:
 	go run cmd/bomb/main.go
 
 watch-conns:
-	@echo "Watching TCP connections on port 8080..."
-	watch -n 1 "lsof -nP -i :8080"
+	@echo "Watching TCP connections on port 8080 ($(OS))..."
+	watch -n 1 "$(WATCH_CONNS_CMD)"
 
 watch-tcp:
-	@echo "Watching TCP states with netstat..."
-	watch -n 1 "netstat -an | grep 8080"
+	@echo "Watching TCP states ($(OS))..."
+	watch -n 1 "$(WATCH_TCP_CMD)"
 
 death-count:
-	@echo "Counting connections in TIME_WAIT state..."
-	watch -n 1 "netstat -an | grep 8080 | grep TIME_WAIT | wc -l"
+	@echo "Counting connections in TIME_WAIT state ($(OS))..."
+	watch -n 1 "$(DEATH_COUNT_CMD)"
 
 dump-packets:
 	@echo "Capturing local packets on port 8080 (Requires sudo)..."
