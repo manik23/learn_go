@@ -3,10 +3,11 @@ go 1.25.6
 use (
 	./modules/go-interview-practise
 	./modules/learn-cgo
+	./modules/learn-control-plane
 	./modules/learn-gin
+	./modules/learn-grpc
+	./modules/learn-networking
 	./modules/learn-routines
 	./modules/learn-runtime
-	./modules/learn-grpc
 	./modules/prod-service-patterns
-	./modules/learn-networking
 )
