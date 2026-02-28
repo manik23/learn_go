@@ -1,5 +1,12 @@
 package v1
 
+import (
+	"hash/fnv"
+	"log"
+	"os"
+	"strconv"
+)
+
 // ShardConfig holds the sharding configuration for this node.
 // In a real system this would be discovered via service registry (etcd/consul).
 type ShardConfig struct {
@@ -12,41 +19,33 @@ type ShardConfig struct {
 }
 
 // OwnsShard returns true if this node is responsible for the given resourceID.
-//
-// 💡 CHALLENGE: Implement Consistent Hashing.
-//
-// RULES:
-//   - Use the FNV-1a hash function (already imported: hash/fnv) to hash the resourceID.
-//   - A resource belongs to a node if: hash(resourceID) % TotalNodes == NodeIndex
-//
-// EXAMPLE:
-//
-//	cfg := ShardConfig{NodeIndex: 0, TotalNodes: 3}
-//	cfg.OwnsShard("resource-abc")  // true if fnv("resource-abc") % 3 == 0
-//
-// WHY FNV?
-//
-//	It's fast and distributes strings uniformly.
-//	Every node given the same input will always get the same output.
-//	No coordination needed — it's pure math.
-//
-// TODO: Implement this function.
+// Uses FNV-1a: deterministic, fast, no coordination needed — pure math.
 func (cfg ShardConfig) OwnsShard(resourceID string) bool {
-	panic("TODO: implement OwnsShard using FNV-1a hash")
+	h := fnv.New32a()
+	h.Write([]byte(resourceID))
+	return h.Sum32()%uint32(cfg.TotalNodes) == uint32(cfg.NodeIndex)
 }
 
 // ParseShardConfig reads NODE_INDEX and TOTAL_NODES from the environment.
-//
-// 💡 CHALLENGE: Implement this function.
-//
-// RULES:
-//   - Read NODE_INDEX (int) and TOTAL_NODES (int) from environment variables.
-//   - If NODE_INDEX is missing or invalid, default to 0.
-//   - If TOTAL_NODES is missing, invalid, or <= 0, default to 1 (single-node mode = owns everything).
-//
-// HINT: Use strconv.Atoi to parse integers from strings.
-//
-// TODO: Implement this function.
+//   - Missing / invalid NODE_INDEX → defaults to 0
+//   - Missing / invalid TOTAL_NODES → defaults to 1 (single-node: owns everything)
 func ParseShardConfig() ShardConfig {
-	panic("TODO: implement ParseShardConfig")
+	nodeIndex := 0
+	if v := os.Getenv("NODE_INDEX"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+			nodeIndex = n
+		}
+	}
+
+	totalNodes := 1
+	if v := os.Getenv("TOTAL_NODES"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			totalNodes = n
+		}
+	}
+
+	cfg := ShardConfig{NodeIndex: nodeIndex, TotalNodes: totalNodes}
+	log.Printf("[SHARD] Config: node %d of %d (owns ~%.0f%% of resources)",
+		nodeIndex, totalNodes, float64(100)/float64(totalNodes))
+	return cfg
 }

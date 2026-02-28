@@ -44,12 +44,12 @@ docker-run: docker-build
 	docker run -it --rm -p 8080:8080 learn-control-plane
 
 cluster-run: docker-build
-	@echo "Starting 3-Node Control Plane Cluster..."
+	@echo "Starting 3-Node Sharded Control Plane Cluster..."
 	@touch $(PWD)/test.db
-	docker run -d --name cp-node-1 -v $(PWD)/test.db:/app/test.db -e NODE_ID=node-1 -p 8080:8080 learn-control-plane
-	docker run -d --name cp-node-2 -v $(PWD)/test.db:/app/test.db -e NODE_ID=node-2 -p 8081:8080 learn-control-plane
-	docker run -d --name cp-node-3 -v $(PWD)/test.db:/app/test.db -e NODE_ID=node-3 -p 8082:8080 learn-control-plane
-	@echo "Nodes active on :8080, :8081, :8082"
+	docker run -d --name cp-node-1 -v $(PWD)/test.db:/app/test.db -e NODE_ID=node-1 -e NODE_INDEX=0 -e TOTAL_NODES=3 -p 8080:8080 learn-control-plane
+	docker run -d --name cp-node-2 -v $(PWD)/test.db:/app/test.db -e NODE_ID=node-2 -e NODE_INDEX=1 -e TOTAL_NODES=3 -p 8081:8080 learn-control-plane
+	docker run -d --name cp-node-3 -v $(PWD)/test.db:/app/test.db -e NODE_ID=node-3 -e NODE_INDEX=2 -e TOTAL_NODES=3 -p 8082:8080 learn-control-plane
+	@echo "Cluster running — nodes own: node-1=shard0, node-2=shard1, node-3=shard2"
 
 cluster-stop:
 	@echo "Cleaning up cluster nodes..."

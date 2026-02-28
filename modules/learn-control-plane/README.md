@@ -1,228 +1,214 @@
 # Cloud Control-Plane Architecture 🧠
 
-This module explores the design of the "Brain" of distributed systems. We focus on how to maintain a consistent global state in a world of partial failures, network retries, and concurrency.
+> **Module 5** of the Senior Go Developer Curriculum. The "Brain" of a distributed system. This module teaches how to maintain consistent global state in a world of partial failures, network retries, and concurrency.
 
 ---
 
-### 🛰️ Progress Tracking
-- [x] **Phase 5.1: Safety** (Idempotency Keys & Request Caching)
-- [x] **Phase 5.2: Stability** (Reconciliation Loops & Level-Triggering)
-- [x] **Phase 5.3: Authority** (Leader Election & Leases)
-- [ ] **Phase 5.4: Scale** (Sharding & Consistent Hashing)
+## 🛰️ Progress Tracking
+
+- [x] **Phase 5.1: Safety** — Idempotency Keys & Request Caching
+- [x] **Phase 5.2: Stability** — Reconciliation Loops & Level-Triggering
+- [x] **Phase 5.3: Authority** — Leader Election & DB Leases
+- [x] **Phase 5.4: Scale** — Consistent Hashing & Shard-Aware Reconciliation
 
 ---
 
-## 🏗️ Phase 5: Strategic Outlook
+## 🏗️ Strategic Outlook: The Four Pillars
 
-A Control Plane is the **"Brain"** of your system. Unlike a standard API, it doesn't just execute commands; it **manages a loop** to ensure reality matches intent.
+A Control Plane is not an API. It **manages a continuous loop** to ensure reality matches intent:
 
-### The total outlook for Phase 5:
-1.  **Safety First**: Prevent double-spending of resources (Idempotency).
-2.  **Autonomous Healing**: Reality drifts; the brain must fix it (Reconciliation).
-3.  **Unified Authority**: Ensure only one brain is in charge (Leader Election).
-4.  **Distributed Scale**: Spread the load across multiple brains (Sharding).
-
-## 🧠 Exercises & Challenges
-
-### Challenge 1: The "Atomic Lock" (Phase 5.1-B)
-**Scenario**: Two simultaneous requests with the same `X-Idempotency-Key` hit different CPU cores. Both check the DB, see nothing, and both start the "Expensive Work".
-- **Task**: Update `IdempotencyMiddleware` or the DB logic to ensure only **one** request can transition the key from "Absent" to "Executing". 
-- **Hint**: Use a database unique constraint or a distributed lock.
-
-### Challenge 2: Self-Healing Surplus (Phase 5.2-A)
-**Scenario**: The user updates `Desired` from 10 to 5.
-- **Task**: Update `reconciler.go` to detect when `Observed > Desired` and gracefully terminate/delete the extra resources.
-- **Goal**: True "Level-Triggered" stability.
-
-### Challenge 3: Chaos Failover (Phase 5.3-B)
-**Scenario**: node-1 holds the leader lease but crashes. node-2 and node-3 must detect the failure and elect a new leader.
-- **Task**: Run `make cluster-kill-leader` and observe the takeover.
-- **Command**: After killing the leader, run `make cluster-logs` and watch for the `[LEASE] Node node-2 acquired lease` log after 15 seconds.
-- **Goal**: Zero-downtime authority transition.
-
-### Challenge 4: Sharding (Phase 5.4)
-**Scenario**: 10 million resources, 3 nodes. Each node should only reconcile its own "district" to avoid all three scanning the same table.
-- **Task**: Implement a `Shard` function using **Consistent Hashing**. Each node picks up only resources where `hash(resourceID) % numNodes == nodeIndex`.
-- **Goal**: Horizontal Scale — the brain grows with the cluster.
-
----
-
-## 🛠️ Stack & Setup
-- **Framework**: `Gin` (for efficient routing and middleware architecture)
-- **State Management**: In-memory (Transitioning to persistent store soon)
-
-### 1. Run the Control Plane
-```bash
-make run
-```
-
-### 2. Observe the Reconciliation
-```bash
-make watch-state
-```
-
-### 3. Remote Integration Tests
-```bash
-# Run with server active in another terminal
-make test-remote
-```
-
-### 4. 3-Node Cluster (Leader Election Test)
-```bash
-# Start all three nodes
-make cluster-run
-
-# Watch all logs (with node prefix)
-make cluster-logs
-
-# See which nodes are alive
-make cluster-status
-
-# Kill node-1 (the leader) to trigger failover
-make cluster-kill-leader
-
-# Teardown the cluster
-make cluster-stop
-```
-*After killing the leader, watch the logs. In ~15 seconds (lease TTL), node-2 or node-3 takes over the "Megaphone".* 
-
----
-
-## 📊 Master Cheat Sheet: The Control Plane Mindset
-
-| Pillar | Mental Model | Pattern | Implementation |
+| Pillar | Mental Model | Core Pattern | Your Bug Without It |
 | :--- | :--- | :--- | :--- |
-| **Safety** | The Cashed Check | Idempotency Key | Middleware intercepting retries. |
-| **Stability**| The Thermostat | Reconciliation | Background loop: `Observe -> Diff -> Act`. |
-| **Authority**| The Megaphone | Leader Election | CAS (Compare-and-Swap) Lease / Distributed locks (etcd/Consul). |
-| **Scale** | District Managers| Sharding | Consistent Hashing. |
+| **Safety** | The Cashed Check | Idempotency Key | Duplicate resources on retry |
+| **Stability** | The Thermostat | Level-Triggered Reconciler | Drifted state never self-heals |
+| **Authority** | The Megaphone | DB Lease (CAS) | 3-node split-brain corrupts data |
+| **Scale** | District Managers | Consistent Hashing | One node scans 100M rows every 5s |
 
 ---
 
-## 🏗️ Phase 5.2: Reconciliation Loops (The Thermostat)
+## 🛠️ Quick Commands
 
-In Phase 5.2, we moved from purely **Reactive** logic (only acting on API calls) to **Autonomous** logic (self-healing background loops).
-
-### 1. Level-Triggered Design
-Unlike "Edge-Triggered" systems that react only when a signal changes, our **Level-Triggered** reconciler constantly compares the current state to the target state.
-- **Observe**: Count `PROVISIONED` records in the DB.
-- **Analyze**: Calculate `Desired - Observed`.
-- **Act**: Create or Delete records to reach equilibrium.
-
-### 2. Implementation: The Loop
-The `startReconciler` worker runs every 5 seconds. It queries the DB for the current `Observed` count, compares against `Desired`, and creates/deletes records to close the gap. Resources stuck in `PROVISIONING` are automatically completed.
-
----
-
-## 🏗️ Phase 5.3: Authority (The Megaphone)
-
-Problem: With 3 nodes all running `Reconcile()` against the same DB, they would double-provision and delete-loop forever. A **single source of authority** is required.
-
-### 1. DB Lease (Compare-And-Swap)
-A single row in `ControlPlaneLease` table acts as a distributed lock:
-- **Row**: `{id: "reconciler-lock", node_id: "node-1", expires_at: now+15s}`
-- **Leader Heartbeat**: Every 5s, the leader atomically `UPDATE`s the row, renewing `expires_at`.
-- **Follower Check**: Other nodes try the same `UPDATE` but their `WHERE` clause (`node_id = me OR expires_at < now`) only matches if the leader has *died*.
-- **Takeover**: When the leader crashes, `expires_at` passes. The first follower to tick wins the `UPDATE` and becomes the new leader.
-
-### 2. Why Atomic UPDATE?
-We do NOT use a Read-then-Write pattern:
-```go
-// ❌ Dangerous: Two nodes can both read "no leader" and both insert
-if no_leader { db.Create(lease) }
-
-// ✅ Safe: Only one node's UPDATE can affect a row at a time
-db.Where("node_id=me OR expires_at < now").Updates(...)  // RowsAffected == 1 means YOU won
-```
-
-### 3. Test It
 ```bash
-make cluster-run   # Start 3 nodes
-make cluster-logs  # Watch node-1 leading
-make cluster-kill-leader  # Kill node-1 → watch node-2/3 take over
+# Local single-node mode
+make run              # Start server (NODE_ID defaults to "local")
+make watch-state      # Live Desired vs Observed view
+make scale-up         # Set Desired = 10
+make scale-down       # Set Desired = 2
+make test             # Unit tests
+make test-remote      # Integration tests (server must be running)
+
+# 3-Node cluster (sharding + leader election)
+make cluster-run      # Build image, start nodes with NODE_INDEX env
+make cluster-logs     # Tail all nodes (prefixed by container name)
+make cluster-status   # Health table of running containers
+make cluster-kill-leader  # Kill node-1, trigger failover after 15s
+make cluster-stop     # Tear down all containers
 ```
 
 ---
 
-## ⏭️ What's Next: Phase 5.4 — Scale (Consistent Hashing)
+## � Best Practices for Building Control Planes
 
-**Problem**: Even with one leader, what if you have 100M resources? One node can't scan 100M rows every 5 seconds.
+### 1. Always Use the Database as the Source of Truth
+Never trust in-memory counters across restarts. On startup, always re-hydrate state from the DB:
+```go
+// ✅ Correct: read from DB on every boot
+db.Model(&ResourceLedger{}).Where("state = ?", PROVISIONED).Count(&p.Observed)
 
-**Solution**: Divide the work. Each node only reconciles its own "district":
-- `node-1` handles `hash(resourceID) % 3 == 0`
-- `node-2` handles `hash(resourceID) % 3 == 1`
-- `node-3` handles `hash(resourceID) % 3 == 2`
+// ❌ Wrong: start from 0 and hope events fill it in
+p.Observed = 0
+```
 
-This is **Consistent Hashing** — the foundation of real Kubernetes controllers (each shard-key is a configmap/pod namespace).
+### 2. Idempotency is a Two-Layer Problem
+
+| Layer | What it protects | Mechanism |
+|---|---|---|
+| **Transport** | HTTP retry with same key | `IdempotencyExecution` table — cache StatusCode + Body |
+| **Logic** | Business entity created twice | `ResourceLedger` state machine — check before creating |
+
+A client using a *different* key for the same resource bypasses the transport cache but hits the logic guard.
+
+### 3. Use Atomic SQL for Distributed Locks
+
+```go
+// ❌ Read-then-Write: Two nodes can both read "no lock" at the same time
+if no_lock_found { db.Create(lock) }
+
+// ✅ Atomic UPDATE: Only one node's UPDATE can affect a row at a time
+result := db.Where("(node_id = ? OR expires_at < ?)", nodeID, now).Updates(...)
+if result.RowsAffected == 0 { /* someone else is leader */ }
+```
+
+### 4. Respect Single-Writer Ownership for Shared Fields
+
+Each shared mutable field should have exactly **one function** that writes to it:
+```go
+// p.Observed is owned by reconcileGlobalState() — only the leader updates it
+// reconcileShard() counts its own myObserved locally and NEVER writes to p.Observed
+// This prevents a shard-local count from stomping the cluster-wide counter
+```
+
+### 5. Separate Global from Local Concerns
+
+```
+Reconcile() every tick:
+  ├── tryAcquireLease() → if LEADER → reconcileGlobalState()
+  │                        (cluster-wide: set Desired, count totals)
+  └── reconcileShard()  → ALL nodes, always
+                         (per-shard: complete PROVISIONING → PROVISIONED)
+```
+
+### 6. Level-Triggered > Edge-Triggered
+
+| Trigger Model | React to | Risk |
+|---|---|---|
+| Edge-Triggered | State *changes* only | Miss one event → broken state forever |
+| **Level-Triggered** ✅ | Current state *vs target* every tick | Self-heals on every iteration |
 
 ---
 
-## 🔍 Revision Notes & Logic Flow
+## 🔑 Cheat Sheet: Key Patterns & Code
 
-### 1. Why Idempotency? (Safety)
-In distributed systems, the network **will** fail. If it fails *after* your server creates a resource but *before* it returns a 200, the client will retry.
-- **The Ledger Solution**: Record every unique `X-Idempotency-Key` and its result.
-- **The side-effect Guard**: Check the `ResourceLedger` (State machine) for existing entities.
-
-### 2. Why Reconciliation? (Stability)
-Manual intervention is for small systems. High-scale systems assume failure.
-- **Edge-Triggered**: "Action on change" (Missed signals = broken state).
-- **Level-Triggered**: "Action on comparison" (Self-healing on every tick).
-
-## 🏗️ Phase 5.1: The Idempotency Ledger
-
-In high-reliability Control Planes, **At-Least-Once Delivery** means retries are inevitable. Idempotency ensures these retries are safe.
-
-### 1. Dual-Layer Protection
-We implemented a two-tier deduplication strategy:
-1.  **Transport Level (Middleware)**: Caches the `StatusCode` and `ResponseBody` for a specific `X-Idempotency-Key`. If a client retries with the same key, they get an identical response immediately without re-triggering logic.
-2.  **Logic Level (Resource Ledger)**: Tracks the state of the business entity (Resource ID). If a different key is used for an existing resource, the logic layer detects the conflict.
-
-### 2. The Implementation Snippet
-
-#### **Middleware: Result Caching**
+### Idempotency Middleware (Atomic Cache)
 ```go
-// Capture the response body
+// Wrap the response writer to capture output
 bw := &bodyWriter{body: bytes.NewBufferString(""), ResponseWriter: c.Writer}
 c.Writer = bw
-
 c.Next()
 
-// Save result to DB if successful
+// Cache if successful
 if c.Writer.Status() < 400 {
-    db.Create(&IdempotencyExecution{
-        Key: key, 
-        StatusCode: c.Writer.Status(), 
-        ResponseBody: bw.body.Bytes(),
-    })
+    db.Create(&IdempotencyExecution{Key: key, StatusCode: c.Writer.Status(), ResponseBody: bw.body.Bytes()})
 }
 ```
 
-#### **Handler: State Guard**
+### Leader Election (Atomic CAS Lease)
 ```go
-err := p.DB.Where("id = ?", req.ID).First(&ledger).Error
-if err == nil {
-    if ledger.State == PROVISIONED {
-        c.JSON(http.StatusOK, ResourceResponse{...})
-        return
+result := db.Model(&ControlPlaneLease{}).
+    Where("id = ?", "reconciler-lock").
+    Where("(node_id = ? OR expires_at < ?)", nodeID, time.Now()).
+    Updates(map[string]interface{}{"node_id": nodeID, "expires_at": time.Now().Add(15 * time.Second)})
+
+isLeader := result.RowsAffected > 0
+```
+
+### Consistent Hashing (Shard Ownership)
+```go
+func (cfg ShardConfig) OwnsShard(resourceID string) bool {
+    h := fnv.New32a()
+    h.Write([]byte(resourceID))
+    return h.Sum32()%uint32(cfg.TotalNodes) == uint32(cfg.NodeIndex)
+}
+```
+
+### Level-Triggered Reconciler (Observe → Diff → Act)
+```go
+func (p *Provisioner) reconcileGlobalState(nodeID string) {
+    var totalCount, observedCount int64
+    db.Model(&ResourceLedger{}).Count(&totalCount)
+    db.Model(&ResourceLedger{}).Where("state = ?", PROVISIONED).Count(&observedCount)
+
+    desired := p.getDesired()
+    if desired > totalCount {
+        // Scale up: create (desired - totalCount) new PROVISIONING stubs
+    } else if desired < totalCount {
+        // Scale down: delete (totalCount - desired) PROVISIONED records
     }
 }
 ```
 
+### Shard-Aware In-Memory Filtering
+```go
+// DB doesn't know your hash function — load all, filter in Go
+var all []ResourceLedger
+db.Find(&all)
+for _, r := range all {
+    if !shard.OwnsShard(r.ID) { continue }
+    // ... process this node's records only
+}
+```
+
 ---
 
-## 🏗️ Phase 5.2: Reconciliation Loops (The Thermostat)
+## ⚠️ Anti-Patterns to Avoid
 
-**The Goal**: The system should constantly work to make the **Observed State** (reality) match the **Desired State** (user's intent).
+| Anti-Pattern | Why It's Dangerous | Fix |
+|---|---|---|
+| `if no_lock { Create(lock) }` | Read-then-write race: two nodes both "see no lock" | Use atomic `UPDATE WHERE ... OR expires_at < now` |
+| Writing per-shard count into `p.Observed` | Stomps the cluster-wide counter | Keep shard count in a `myObserved` local variable |
+| `WHERE hash(id) % 3 == 0` in SQL | DB doesn't know Go's FNV hash | Load all, filter in-memory with `OwnsShard()` |
+| Trusting in-memory `p.Desired` on startup | Server restarts with 0 desired | Read from DB on startup |
+| Combining Leader gate + Shard gate naively | Followers skip their shard work forever | Separate: leader does global ops, ALL nodes do shard work |
 
-### Core Concepts:
-1. **Edge-Triggered**: Act only when a signal changes (Efficient but risky if signals are lost).
-2. **Level-Triggered**: Act by comparing state at every interval (Self-healing and robust).
-3. **The Loop**: `Observe` -> `Analyze` (Diff) -> `Act`.
+---
 
+## 🧠 Exercises & Challenges
 
-## 🔍 Revision Notes: The Idempotency Key
-In a distributed system, **At-Least-Once Delivery** is common. 
-- If the network fails *after* the server succeeds but *before* the client gets the ACK, the client will retry.
-- Without a ledger, you would create two resources. 
-- **The Fix**: The client generates a unique `x-idempotency-key`. The server records this key in a durable store (Redis/DB) before committing the side-effect.
+### Challenge 1: The "Atomic Lock" (Phase 5.1-B)
+**Scenario**: Two simultaneous requests with the same `X-Idempotency-Key` hit the server. Both check the DB, see nothing, and proceed.
+- **Task**: Ensure the DB `UNIQUE` constraint on the key is the last line of defence. Observe the graceful error handling when the second insert fails.
+
+### Challenge 2: Self-Healing Surplus (Phase 5.2-A)
+**Scenario**: Scale down from 10 → 3. Verify the reconciler deletes exactly 7 resources.
+```bash
+make scale-up   # set Desired = 10
+# wait for stable
+make scale-down # set Desired = 2
+make watch-state
+```
+
+### Challenge 3: Leader Failover (Phase 5.3-B)
+```bash
+make cluster-run
+make cluster-logs   # verify node-1 is leader
+make cluster-kill-leader
+# wait 15 seconds... watch node-2 or node-3 take over
+```
+
+### Challenge 4: Per-Shard Leases (Phase 5.4 — Advanced)
+Replace the single `reconciler-lock` with per-shard locks:
+```go
+lockKey := fmt.Sprintf("reconciler-lock-shard-%d", shard.NodeIndex)
+tryAcquireLease(nodeID, lockKey, db)
+```
+Now ALL three nodes reconcile in parallel with no single point of coordination.
