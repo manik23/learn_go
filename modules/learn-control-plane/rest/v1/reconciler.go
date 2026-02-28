@@ -4,10 +4,12 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
 	"time"
 )
 
 func startReconciler(ctx context.Context, p *Provisioner) {
+
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
@@ -22,6 +24,17 @@ func startReconciler(ctx context.Context, p *Provisioner) {
 }
 
 func (p *Provisioner) Reconcile() {
+	nodeId := os.Getenv("NODE_ID")
+	if nodeId == "" {
+		log.Printf("[RECONCILER] NODE_ID not set, skipping reconciliation")
+		return
+	}
+
+	if !tryAcquireLease(nodeId, p.DB) {
+		log.Printf("[RECONCILER] Failed to acquire lease, skipping reconciliation")
+		return
+	}
+
 	var observedCount int64
 	var totalCount int64
 	p.DB.Model(&ResourceLedger{}).Where("state = ?", PROVISIONED).Count(&observedCount)

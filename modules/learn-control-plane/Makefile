@@ -34,6 +34,8 @@ test-remote:
 	go test -v -run=TestRemoteProvisioning ./rest/v1/...
 
 docker-build:
+	@echo "Building Control Plane Linux Binary locally..."
+	GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o control-plane-linux main.go
 	@echo "Building Control Plane Linux Container..."
 	docker build -t learn-control-plane .
 
@@ -41,6 +43,37 @@ docker-run: docker-build
 	@echo "Running Control Plane in Linux Environment..."
 	docker run -it --rm -p 8080:8080 learn-control-plane
 
+cluster-run: docker-build
+	@echo "Starting 3-Node Control Plane Cluster..."
+	@touch $(PWD)/test.db
+	docker run -d --name cp-node-1 -v $(PWD)/test.db:/app/test.db -e NODE_ID=node-1 -p 8080:8080 learn-control-plane
+	docker run -d --name cp-node-2 -v $(PWD)/test.db:/app/test.db -e NODE_ID=node-2 -p 8081:8080 learn-control-plane
+	docker run -d --name cp-node-3 -v $(PWD)/test.db:/app/test.db -e NODE_ID=node-3 -p 8082:8080 learn-control-plane
+	@echo "Nodes active on :8080, :8081, :8082"
+
+cluster-stop:
+	@echo "Cleaning up cluster nodes..."
+	@docker stop cp-node-1 cp-node-2 cp-node-3 2>/dev/null || true
+	@docker rm cp-node-1 cp-node-2 cp-node-3 2>/dev/null || true
+
+# Kill the current leader to test failover
+# After 15s, node-2 or node-3 should take over the lease
+cluster-kill-leader:
+	@echo "Killing cp-node-1 (current leader) to test failover..."
+	@docker stop cp-node-1
+	@echo "Leader killed! Watch node-2 or node-3 take over after 15s..."
+	@echo "Run: make cluster-logs to observe the takeover"
+
+cluster-status:
+	@echo "=== Cluster Health ==="
+	@docker ps --filter "name=cp-node" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+
+cluster-logs:
+	@echo "Tailing logs from all running nodes (Ctrl+C to stop)..."
+	@for c in $$(docker ps --filter "name=cp-node" --format "{{.Names}}"); do \
+		docker logs --tail=5 -f $$c 2>&1 | sed "s/^/[$$c] /" & \
+	done; wait
+
 clean:
 	rm -f control-plane
-	rm -rf db/
+	rm -f test.db

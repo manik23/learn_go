@@ -2,7 +2,8 @@ package main
 
 import (
 	"context"
-	"learn-gin/db"
+	"fmt"
+	v1 "learn-control-plane/rest/v1"
 	"log"
 	"net/http"
 	"os"
@@ -10,7 +11,8 @@ import (
 	"syscall"
 	"time"
 
-	v1 "learn-control-plane/rest/v1"
+	"github.com/glebarez/sqlite"
+	"gorm.io/gorm"
 
 	"github.com/gin-gonic/gin"
 )
@@ -63,9 +65,17 @@ func setupServer(serverCtx context.Context, port string) *http.Server {
 }
 
 func setupRoutes(serverCtx context.Context, r *gin.Engine) {
-	db, err := db.SetupDB()
+	db, err := setupDB()
 	if err != nil {
 		log.Fatalf("error setting up database: %v", err)
 	}
 	v1.SetupV1(serverCtx, r, db)
+}
+
+func setupDB() (*gorm.DB, error) {
+	db, err := gorm.Open(sqlite.Open("test.db"), &gorm.Config{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect database: %w", err)
+	}
+	return db, nil
 }

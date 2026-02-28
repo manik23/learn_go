@@ -7,7 +7,7 @@ This module explores the design of the "Brain" of distributed systems. We focus 
 ### 🛰️ Progress Tracking
 - [x] **Phase 5.1: Safety** (Idempotency Keys & Request Caching)
 - [x] **Phase 5.2: Stability** (Reconciliation Loops & Level-Triggering)
-- [ ] **Phase 5.3: Authority** (Leader Election & Leases)
+- [x] **Phase 5.3: Authority** (Leader Election & Leases)
 - [ ] **Phase 5.4: Scale** (Sharding & Consistent Hashing)
 
 ---
@@ -34,16 +34,16 @@ A Control Plane is the **"Brain"** of your system. Unlike a standard API, it doe
 - **Task**: Update `reconciler.go` to detect when `Observed > Desired` and gracefully terminate/delete the extra resources.
 - **Goal**: True "Level-Triggered" stability.
 
-### Challenge 3: Chaos & Health (Phase 5.2-B)
-**Scenario**: A resource is in the `PROVISIONED` state in the DB, but the actual "service" it represents has crashed.
-- **Task**: 
-    1. Add a `LastHeartbeat` field to `ResourceLedger`.
-    2. Update the `Reconciler` to treat resources with a stale heartbeat (> 30s) as `FAILED`.
-    3. Watch the system automatically "replace" the dead resource.
-This module adheres to our strict engineering loop:
-1. **Idempotency first**: Every write must be safe to retry.
-2. **Observability**: Metrics on "Observed State" vs "Desired State".
-3. **Chaos-Ready**: We will simulate network partitions to see if our Control Plane can recover.
+### Challenge 3: Chaos Failover (Phase 5.3-B)
+**Scenario**: node-1 holds the leader lease but crashes. node-2 and node-3 must detect the failure and elect a new leader.
+- **Task**: Run `make cluster-kill-leader` and observe the takeover.
+- **Command**: After killing the leader, run `make cluster-logs` and watch for the `[LEASE] Node node-2 acquired lease` log after 15 seconds.
+- **Goal**: Zero-downtime authority transition.
+
+### Challenge 4: Sharding (Phase 5.4)
+**Scenario**: 10 million resources, 3 nodes. Each node should only reconcile its own "district" to avoid all three scanning the same table.
+- **Task**: Implement a `Shard` function using **Consistent Hashing**. Each node picks up only resources where `hash(resourceID) % numNodes == nodeIndex`.
+- **Goal**: Horizontal Scale — the brain grows with the cluster.
 
 ---
 
@@ -61,11 +61,30 @@ make run
 make watch-state
 ```
 
-### 3. Run Remote Integration Tests
-Ensure the server is running in another terminal before executing:
+### 3. Remote Integration Tests
 ```bash
+# Run with server active in another terminal
 make test-remote
 ```
+
+### 4. 3-Node Cluster (Leader Election Test)
+```bash
+# Start all three nodes
+make cluster-run
+
+# Watch all logs (with node prefix)
+make cluster-logs
+
+# See which nodes are alive
+make cluster-status
+
+# Kill node-1 (the leader) to trigger failover
+make cluster-kill-leader
+
+# Teardown the cluster
+make cluster-stop
+```
+*After killing the leader, watch the logs. In ~15 seconds (lease TTL), node-2 or node-3 takes over the "Megaphone".* 
 
 ---
 
@@ -91,7 +110,50 @@ Unlike "Edge-Triggered" systems that react only when a signal changes, our **Lev
 - **Act**: Create or Delete records to reach equilibrium.
 
 ### 2. Implementation: The Loop
-The `StartReconciler` worker runs every 5 seconds. If it detects that a resource is in the `PROVISIONING` state for too long (or was created by a previous process that crashed), it completes the work automatically.
+The `startReconciler` worker runs every 5 seconds. It queries the DB for the current `Observed` count, compares against `Desired`, and creates/deletes records to close the gap. Resources stuck in `PROVISIONING` are automatically completed.
+
+---
+
+## 🏗️ Phase 5.3: Authority (The Megaphone)
+
+Problem: With 3 nodes all running `Reconcile()` against the same DB, they would double-provision and delete-loop forever. A **single source of authority** is required.
+
+### 1. DB Lease (Compare-And-Swap)
+A single row in `ControlPlaneLease` table acts as a distributed lock:
+- **Row**: `{id: "reconciler-lock", node_id: "node-1", expires_at: now+15s}`
+- **Leader Heartbeat**: Every 5s, the leader atomically `UPDATE`s the row, renewing `expires_at`.
+- **Follower Check**: Other nodes try the same `UPDATE` but their `WHERE` clause (`node_id = me OR expires_at < now`) only matches if the leader has *died*.
+- **Takeover**: When the leader crashes, `expires_at` passes. The first follower to tick wins the `UPDATE` and becomes the new leader.
+
+### 2. Why Atomic UPDATE?
+We do NOT use a Read-then-Write pattern:
+```go
+// ❌ Dangerous: Two nodes can both read "no leader" and both insert
+if no_leader { db.Create(lease) }
+
+// ✅ Safe: Only one node's UPDATE can affect a row at a time
+db.Where("node_id=me OR expires_at < now").Updates(...)  // RowsAffected == 1 means YOU won
+```
+
+### 3. Test It
+```bash
+make cluster-run   # Start 3 nodes
+make cluster-logs  # Watch node-1 leading
+make cluster-kill-leader  # Kill node-1 → watch node-2/3 take over
+```
+
+---
+
+## ⏭️ What's Next: Phase 5.4 — Scale (Consistent Hashing)
+
+**Problem**: Even with one leader, what if you have 100M resources? One node can't scan 100M rows every 5 seconds.
+
+**Solution**: Divide the work. Each node only reconciles its own "district":
+- `node-1` handles `hash(resourceID) % 3 == 0`
+- `node-2` handles `hash(resourceID) % 3 == 1`
+- `node-3` handles `hash(resourceID) % 3 == 2`
+
+This is **Consistent Hashing** — the foundation of real Kubernetes controllers (each shard-key is a configmap/pod namespace).
 
 ---
 

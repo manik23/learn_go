@@ -102,7 +102,7 @@ func SetupV1(serverCtx context.Context, r *gin.Engine, db *gorm.DB) {
 		mu:       sync.RWMutex{},
 	}
 
-	p.DB.AutoMigrate(&ResourceLedger{}, &IdempotencyExecution{})
+	p.DB.AutoMigrate(&ResourceLedger{}, &IdempotencyExecution{}, &ControlPlaneLease{})
 
 	// Sync state from Database (Source of Truth)
 	p.DB.Model(&ResourceLedger{}).Count(&p.Desired)
