@@ -55,7 +55,8 @@ func AuthMiddleware() gin.HandlerFunc {
 func IdempotencyMiddleware(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Only apply to state-changing methods
-		if c.Request.Method == http.MethodGet {
+		// EXCEPTION: Skip for /v1/desired as it's a control-plane update that shouldn't require client-side keys for learning
+		if c.Request.Method == http.MethodGet || c.Request.URL.Path == "/v1/desired" {
 			c.Next()
 			return
 		}

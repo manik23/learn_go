@@ -2,6 +2,7 @@ package v1
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -17,7 +18,10 @@ func setupTestRouter() (*gin.Engine, *gorm.DB) {
 	gin.SetMode(gin.TestMode)
 	r := gin.Default()
 	db, _ := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
-	SetupV1(r, db)
+
+	// For tests, we use a background context.
+	// We don't want to cancel it immediately as it would stop the reconciler loop used in tests.
+	SetupV1(context.Background(), r, db)
 	return r, db
 }
 

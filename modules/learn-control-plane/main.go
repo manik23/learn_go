@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	v1 "learn-control-plane/rest/v1"
 	"learn-gin/db"
 	"log"
 	"net/http"
@@ -10,6 +9,8 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+
+	v1 "learn-control-plane/rest/v1"
 
 	"github.com/gin-gonic/gin"
 )
@@ -28,7 +29,7 @@ func main() {
 		port = "8080"
 	}
 
-	httpServer := setupServer(port)
+	httpServer := setupServer(ctx, port)
 
 	go func() {
 		log.Printf("Control Plane Node active on :%s\n", port)
@@ -48,11 +49,11 @@ func main() {
 	log.Println("Server exited properly")
 }
 
-func setupServer(port string) *http.Server {
+func setupServer(serverCtx context.Context, port string) *http.Server {
 	r := gin.Default()
 
 	// Core Endpoints
-	setupRoutes(r)
+	setupRoutes(serverCtx, r)
 
 	httpServer := &http.Server{
 		Addr:    ":" + port,
@@ -61,10 +62,10 @@ func setupServer(port string) *http.Server {
 	return httpServer
 }
 
-func setupRoutes(r *gin.Engine) {
+func setupRoutes(serverCtx context.Context, r *gin.Engine) {
 	db, err := db.SetupDB()
 	if err != nil {
 		log.Fatalf("error setting up database: %v", err)
 	}
-	v1.SetupV1(r, db)
+	v1.SetupV1(serverCtx, r, db)
 }

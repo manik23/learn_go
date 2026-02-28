@@ -1,10 +1,12 @@
 package v1
 
 import (
+	"context"
 	"errors"
 	"log"
 	"math/rand"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -20,13 +22,56 @@ const (
 )
 
 type Provisioner struct {
-	Desired  int `json:"desired"`
-	Observed int `json:"observed"`
+	Desired  int64 `json:"desired"`
+	Observed int64 `json:"observed"`
 	DB       *gorm.DB
+	mu       sync.RWMutex
+}
+
+func (p *Provisioner) incDesired() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.Desired++
+}
+
+func (p *Provisioner) decDesired() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.Desired--
+}
+
+func (p *Provisioner) incObserved() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.Observed++
+}
+
+func (p *Provisioner) decObserved() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.Observed--
+}
+
+func (p *Provisioner) getDesired() int64 {
+	p.mu.RLock()
+	desired := p.Desired
+	p.mu.RUnlock()
+	return desired
+}
+
+func (p *Provisioner) getObserved() int64 {
+	p.mu.RLock()
+	observed := p.Observed
+	p.mu.RUnlock()
+	return observed
 }
 
 type ResourceRequest struct {
 	ID string `json:"id"`
+}
+
+type DesiredRequest struct {
+	Count int64 `json:"count"`
 }
 
 type ResourceResponse struct {
@@ -49,15 +94,21 @@ type IdempotencyExecution struct {
 	CreatedAt    time.Time `json:"created_at"`
 }
 
-func SetupV1(r *gin.Engine, db *gorm.DB) {
-
+func SetupV1(serverCtx context.Context, r *gin.Engine, db *gorm.DB) {
 	p := &Provisioner{
-		Desired:  1,
+		Desired:  0,
 		Observed: 0,
 		DB:       db,
+		mu:       sync.RWMutex{},
 	}
 
 	p.DB.AutoMigrate(&ResourceLedger{}, &IdempotencyExecution{})
+
+	// Sync state from Database (Source of Truth)
+	p.DB.Model(&ResourceLedger{}).Count(&p.Desired)
+	p.DB.Model(&ResourceLedger{}).Where("state = ?", PROVISIONED).Count(&p.Observed)
+
+	go startReconciler(serverCtx, p)
 
 	v1 := r.Group("v1")
 	v1.Use(AuthMiddleware())
@@ -73,9 +124,12 @@ func SetupV1(r *gin.Engine, db *gorm.DB) {
 	})
 
 	v1.POST("/provision", p.resourceProvisioningHandler)
+	v1.POST("/desired", p.setDesiredHandler)
 }
 
 func (p *Provisioner) resourceProvisioningHandler(c *gin.Context) {
+	// Phase 1: Increment the desired state
+	p.incDesired()
 
 	var req ResourceRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -126,6 +180,24 @@ func (p *Provisioner) resourceProvisioningHandler(c *gin.Context) {
 	case <-time.After(time.Duration(rand.Intn(5)) * time.Second):
 		log.Printf("Resource provisioning completed for Id %s", req.ID)
 		p.DB.Model(&resourceLedger).Update("state", PROVISIONED)
+		p.incObserved()
 		c.JSON(http.StatusCreated, gin.H{"message": "successfully provisioned"})
 	}
+}
+
+func (p *Provisioner) setDesiredHandler(c *gin.Context) {
+	var req DesiredRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	p.mu.Lock()
+	p.Desired = req.Count
+	p.mu.Unlock()
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Desired state updated",
+		"desired": p.Desired,
+	})
 }

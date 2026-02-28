@@ -8,8 +8,22 @@ run:
 	go run main.go
 
 watch-state:
-	@echo "Watching Desired vs Observed State..."
-	@watch -n 1 "curl -s localhost:8080/state | python3 -m json.tool || true"
+	@echo "Watching Desired vs Observed State... (Ctrl+C to stop)"
+	@watch -n 1 "curl -s -H 'X-Auth-Token: secret' localhost:8080/v1/state | python3 -m json.tool || true"
+
+scale-up:
+	@echo "Scaling Desired State to 10..."
+	@curl -X POST http://localhost:8080/v1/desired \
+		-H "Content-Type: application/json" \
+		-H "X-Auth-Token: secret" \
+		-d '{"count": 10}'
+
+scale-down:
+	@echo "Scaling Desired State to 2..."
+	@curl -X POST http://localhost:8080/v1/desired \
+		-H "Content-Type: application/json" \
+		-H "X-Auth-Token: secret" \
+		-d '{"count": 2}'
 
 test:
 	@echo "Running local unit tests..."

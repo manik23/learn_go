@@ -5,10 +5,22 @@ This module explores the design of the "Brain" of distributed systems. We focus 
 ---
 
 ### 🛰️ Progress Tracking
-- [x] **Phase 5.1: Idempotency & Side-effects** (Middleware Result Caching + Resource Ledger)
-- [ ] **Phase 5.2: Reconciliation Loops** (The Level-Triggered Design)
+- [x] **Phase 5.1: Safety** (Idempotency Keys & Request Caching)
+- [x] **Phase 5.2: Stability** (Reconciliation Loops & Level-Triggering)
+- [ ] **Phase 5.3: Authority** (Leader Election & Leases)
+- [ ] **Phase 5.4: Scale** (Sharding & Consistent Hashing)
 
 ---
+
+## 🏗️ Phase 5: Strategic Outlook
+
+A Control Plane is the **"Brain"** of your system. Unlike a standard API, it doesn't just execute commands; it **manages a loop** to ensure reality matches intent.
+
+### The total outlook for Phase 5:
+1.  **Safety First**: Prevent double-spending of resources (Idempotency).
+2.  **Autonomous Healing**: Reality drifts; the brain must fix it (Reconciliation).
+3.  **Unified Authority**: Ensure only one brain is in charge (Leader Election).
+4.  **Distributed Scale**: Spread the load across multiple brains (Sharding).
 
 ## 🧠 Exercises & Challenges
 
@@ -57,16 +69,43 @@ make test-remote
 
 ---
 
-## 📊 Control-Plane Cheat Sheet
+## 📊 Master Cheat Sheet: The Control Plane Mindset
 
-| Concept | Implementation | Analogy |
-| :--- | :--- | :--- |
-| **Idempotency** | `Idempotency-Key` Ledger | A check to see if we already cashed this specific check. |
-| **Reconciliation** | `Desired` - `Observed` | A thermostat trying to reach the target temperature. |
-| **Leader Election** | CAS (Compare-and-Swap) Lease | Only one person holds the "Megaphone" at any time. |
-| **Sharding** | Rendezvous / Jump Hashing | Distributing the work so no single brain is overloaded. |
+| Pillar | Mental Model | Pattern | Implementation |
+| :--- | :--- | :--- | :--- |
+| **Safety** | The Cashed Check | Idempotency Key | Middleware intercepting retries. |
+| **Stability**| The Thermostat | Reconciliation | Background loop: `Observe -> Diff -> Act`. |
+| **Authority**| The Megaphone | Leader Election | CAS (Compare-and-Swap) Lease / Distributed locks (etcd/Consul). |
+| **Scale** | District Managers| Sharding | Consistent Hashing. |
 
 ---
+
+## 🏗️ Phase 5.2: Reconciliation Loops (The Thermostat)
+
+In Phase 5.2, we moved from purely **Reactive** logic (only acting on API calls) to **Autonomous** logic (self-healing background loops).
+
+### 1. Level-Triggered Design
+Unlike "Edge-Triggered" systems that react only when a signal changes, our **Level-Triggered** reconciler constantly compares the current state to the target state.
+- **Observe**: Count `PROVISIONED` records in the DB.
+- **Analyze**: Calculate `Desired - Observed`.
+- **Act**: Create or Delete records to reach equilibrium.
+
+### 2. Implementation: The Loop
+The `StartReconciler` worker runs every 5 seconds. If it detects that a resource is in the `PROVISIONING` state for too long (or was created by a previous process that crashed), it completes the work automatically.
+
+---
+
+## 🔍 Revision Notes & Logic Flow
+
+### 1. Why Idempotency? (Safety)
+In distributed systems, the network **will** fail. If it fails *after* your server creates a resource but *before* it returns a 200, the client will retry.
+- **The Ledger Solution**: Record every unique `X-Idempotency-Key` and its result.
+- **The side-effect Guard**: Check the `ResourceLedger` (State machine) for existing entities.
+
+### 2. Why Reconciliation? (Stability)
+Manual intervention is for small systems. High-scale systems assume failure.
+- **Edge-Triggered**: "Action on change" (Missed signals = broken state).
+- **Level-Triggered**: "Action on comparison" (Self-healing on every tick).
 
 ## 🏗️ Phase 5.1: The Idempotency Ledger
 
