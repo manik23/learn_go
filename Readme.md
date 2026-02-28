@@ -24,6 +24,7 @@ This path focuses on high-performance, resilient, and production-grade Go engine
 - [🛡️ Production Service Patterns](./modules/prod-service-patterns/) - Graceful shutdown, pooling, and pprof.
 - [🛡️ gRPC Deeply](./modules/learn-grpc/) - Unary/Streaming/Bidi, Interceptors, Protobuf Design, Prometheus Metrics.
 - [🌐 Linux/Networking Systems](./modules/learn-networking/) - TCP States, FD Leaks, `netpoll`, and Syscall Tracing (`strace`).
+- [🛡️ Cloud Control-Plane Architecture](./modules/learn-control-plane/) - Idempotency, Level-Triggered Reconciliation, DB Lease Election, Consistent Hashing (Sharding).
 
 ### 📚 Fundamentals (Legacy)
 - [🚀 Go-Routines](./modules/learn-routines/) - Concurrency patterns and worker pools.
