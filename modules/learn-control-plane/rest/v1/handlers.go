@@ -42,6 +42,13 @@ type ResourceLedger struct {
 	UpdatedAt time.Time         `json:"updated_at"`
 }
 
+type IdempotencyExecution struct {
+	Key          string    `gorm:"primaryKey"`
+	StatusCode   int       `json:"status_code"`
+	ResponseBody []byte    `json:"response_body"`
+	CreatedAt    time.Time `json:"created_at"`
+}
+
 func SetupV1(r *gin.Engine, db *gorm.DB) {
 
 	p := &Provisioner{
@@ -50,12 +57,12 @@ func SetupV1(r *gin.Engine, db *gorm.DB) {
 		DB:       db,
 	}
 
-	p.DB.AutoMigrate(&ResourceLedger{})
+	p.DB.AutoMigrate(&ResourceLedger{}, &IdempotencyExecution{})
 
 	v1 := r.Group("v1")
 	v1.Use(AuthMiddleware())
-	// Phase 5.1 Idempotency Key Implementation
-	v1.Use(IdempotencyMiddleware())
+	// Phase 5.1 Idempotency Key Implementation with Caching
+	v1.Use(IdempotencyMiddleware(db))
 
 	v1.GET("/state", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{

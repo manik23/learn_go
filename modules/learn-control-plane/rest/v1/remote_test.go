@@ -68,7 +68,7 @@ func TestRemoteProvisioning(t *testing.T) {
 			}
 		}
 
-		// 2. Immediate Duplicate Call (should hit 'Already in progress' or 'Already exists')
+		// 2. Exact Duplicate Call (Same Idempotency Key) -> Returns CACHED result
 		req2, _ := http.NewRequest("POST", baseURL+"/v1/provision", bytes.NewBuffer(body))
 		req2.Header.Set("X-Auth-Token", "secret")
 		req2.Header.Set("X-Idempotency-Key", "key-"+resourceID)
@@ -77,7 +77,21 @@ func TestRemoteProvisioning(t *testing.T) {
 		assert.NoError(t, err)
 		if err == nil {
 			defer resp2.Body.Close()
-			assert.Contains(t, []int{http.StatusAccepted, http.StatusOK}, resp2.StatusCode)
+			// Should be identical to the first response due to caching
+			assert.Equal(t, resp.StatusCode, resp2.StatusCode)
+		}
+
+		// 3. Different Idempotency Key (Same Resource ID) -> Hits the LEDGER logic
+		req3, _ := http.NewRequest("POST", baseURL+"/v1/provision", bytes.NewBuffer(body))
+		req3.Header.Set("X-Auth-Token", "secret")
+		req3.Header.Set("X-Idempotency-Key", "other-key-"+resourceID)
+
+		resp3, err := client.Do(req3)
+		assert.NoError(t, err)
+		if err == nil {
+			defer resp3.Body.Close()
+			// Should return 200 (Already Provisioned) or 202 (Already in Progress)
+			assert.Contains(t, []int{http.StatusOK, http.StatusAccepted}, resp3.StatusCode)
 		}
 	})
 }

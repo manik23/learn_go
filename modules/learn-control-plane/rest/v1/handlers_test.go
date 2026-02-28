@@ -44,7 +44,7 @@ func TestAuthMiddleware(t *testing.T) {
 		req, _ := http.NewRequest("GET", "/v1/state", nil)
 		req.Header.Set("X-Auth-Token", "secret")
 		router.ServeHTTP(w, req)
-		assert.Equal(t, http.StatusBadRequest, w.Code) // Fails later at Idempotency check
+		assert.Equal(t, http.StatusOK, w.Code) // Now works as Idempotency is skipped for GET
 	})
 }
 

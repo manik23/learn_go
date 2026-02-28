@@ -1,12 +1,25 @@
 package v1
 
 import (
+	"bytes"
+	"errors"
 	"log"
 	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
+
+type bodyWriter struct {
+	gin.ResponseWriter
+	body *bytes.Buffer
+}
+
+func (w bodyWriter) Write(b []byte) (int, error) {
+	w.body.Write(b)
+	return w.ResponseWriter.Write(b)
+}
 
 func loggerMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -39,23 +52,55 @@ func AuthMiddleware() gin.HandlerFunc {
 	}
 }
 
-func IdempotencyMiddleware() gin.HandlerFunc {
+func IdempotencyMiddleware(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// TODO: Implement the logic:
-		//  1) Grab the "X-Idempotency-Key" header
-		//  2) If missing, respond with 400
-		//  3) Otherwise pass to next handler
-
-		if c.Request.Header == nil {
-			c.AbortWithStatus(http.StatusBadRequest)
+		// Only apply to state-changing methods
+		if c.Request.Method == http.MethodGet {
+			c.Next()
 			return
 		}
 
-		if token := c.Request.Header.Get("X-Idempotency-Key"); token == "" {
-			c.AbortWithStatus(http.StatusBadRequest)
+		key := c.Request.Header.Get("X-Idempotency-Key")
+		if key == "" {
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "X-Idempotency-Key header is required"})
 			return
 		}
+
+		// 1. Check if we have a cached result
+		var execution IdempotencyExecution
+		err := db.Where("key = ?", key).First(&execution).Error
+		if err == nil {
+			log.Printf("[IDEMPOTENCY] Returning cached result for key: %s", key)
+			c.Data(execution.StatusCode, "application/json", execution.ResponseBody)
+			c.Abort()
+			return
+		}
+
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			log.Printf("[IDEMPOTENCY] Failed to check idempotency for key %s: %v", key, err)
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "idempotency check failed"})
+			return
+		}
+
+		// 2. Wrap the response writer to capture the result
+		bw := &bodyWriter{body: bytes.NewBufferString(""), ResponseWriter: c.Writer}
+		c.Writer = bw
+
 		c.Next()
+
+		// 3. Store the result if the request was successful
+		if c.Writer.Status() < 400 {
+			log.Printf("[IDEMPOTENCY] Caching result for key: %s", key)
+			capture := IdempotencyExecution{
+				Key:          key,
+				StatusCode:   c.Writer.Status(),
+				ResponseBody: bw.body.Bytes(),
+				CreatedAt:    time.Now(),
+			}
+			if err := db.Create(&capture).Error; err != nil {
+				log.Printf("[IDEMPOTENCY] Failed to cache result for key %s: %v", key, err)
+			}
+		}
 	}
 }
 
