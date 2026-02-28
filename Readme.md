@@ -12,8 +12,8 @@ This path focuses on high-performance, resilient, and production-grade Go engine
 | 2 | **Performance Engineering** | ✅ Completed | `pprof` (CPU/Heap), Flame Graphs, Allocation Optimization, `Benchmark` logic vs network overhead. |
 | 3 | **gRPC Deeply** | ✅ Completed | Unary/Streaming/Bidi, Interceptors, Protobuf Design, Prometheus Metrics. |
 | 4 | **Linux/Networking Systems** | ✅ Completed | TCP States, FD Leaks, `netpoll`, Syscall Tracing (`strace`), Packet Flags. |
-| 5 | **Envoy + xDS Control Plane** | 📅 To Do | LDS/RDS/CDS/EDS, Config versioning, Rollout safety. |
-| 6 | **Cloud Control-Plane Architecture** | 📅 To Do | Idempotency, Reconciliation loops, Leader election, Sharding. |
+| 5 | **Cloud Control-Plane Architecture** | 📅 To Do | Idempotency, Reconciliation loops, Leader election, Sharding. |
+| 6 | **Envoy + xDS Control Plane** | 📅 To Do | LDS/RDS/CDS/EDS, Config versioning, Rollout safety. |
 | 7 | **DPDK Integration Model** | 📅 To Do | CGO boundaries, Zero-copy interfaces, Memory ownership. |
 
 ---
@@ -42,6 +42,6 @@ For every module in this curriculum, we adhere to a strict **Systemic Engineerin
 5.  **Cheat Sheets**: Every module ends with a "Revision Cheat Sheet" containing the most critical commands and codes for quick reference.
 
 ## 🚀 How to Resume
-1.  **Objective**: Start **Module 5: Envoy + xDS Control Plane**.
-2.  **Initial Task**: Initialize the `learn-xds` module and define the Control Plane architecture.
-3.  **Environment**: Ensure Docker is running for Envoy sidecar experiments.
+1.  **Objective**: Start **Module 5: Cloud Control-Plane Architecture**.
+2.  **Initial Task**: Initialize the `learn-control-plane` module and explore **Idempotency** vs **Side-effects**.
+3.  **Core Concepts**: Reconciliation loops, Leader Election (etcd/consul), and Sharding strategies.
